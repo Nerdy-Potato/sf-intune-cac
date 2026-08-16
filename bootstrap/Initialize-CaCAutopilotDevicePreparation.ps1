@@ -81,7 +81,12 @@ else {
 }
 
 $owners = @((Invoke-MgGraphRequest -Method GET -Uri "v1.0/groups/$($group.id)/owners?`$select=id").value)
-if ($servicePrincipal.id -notin $owners.id) {
+$ownerIds = @($owners | ForEach-Object {
+    if ($null -ne $_ -and $_.PSObject.Properties['id']) {
+        [string]$_.id
+    }
+})
+if ([string]$servicePrincipal.id -notin $ownerIds) {
     if ($PSCmdlet.ShouldProcess($GroupDisplayName, 'Add Intune Provisioning Client as owner')) {
         Invoke-MgGraphRequest -Method POST -Uri "v1.0/groups/$($group.id)/owners/`$ref" -Body @{
             '@odata.id' = "https://graph.microsoft.com/v1.0/directoryObjects/$($servicePrincipal.id)"
