@@ -120,7 +120,7 @@ Describe 'New-CaCPlan' {
 
         It 'reports no changes at all' {
             $changes = @($script:SyncPlan | Where-Object { $_.Action -notin @('NoChange', 'Skip') })
-            $changes | Should -BeNullOrEmpty -Because ($changes | ForEach-Object { "$($_.Kind) $($_.Action) $($_.Target): $($_.Details -join ',')" }) -join ' | '
+            $changes | Should -BeNullOrEmpty -Because ((($changes | ForEach-Object { "$($_.Kind) $($_.Action) $($_.Target): $($_.Details -join ',')" }) -join ' | '))
         }
 
         It 'is idempotent: a second plan is also empty' {

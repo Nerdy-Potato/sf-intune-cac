@@ -8,7 +8,7 @@ BeforeAll {
 Describe 'Repository configuration' {
     It 'passes schema and safety validation with no errors' {
         $errors = @($script:Findings | Where-Object Severity -EQ 'Error')
-        $errors | Should -BeNullOrEmpty -Because ($errors | ForEach-Object { "$($_.Rule): $($_.Message)" }) -join '; '
+        $errors | Should -BeNullOrEmpty -Because ((($errors | ForEach-Object { "$($_.Rule): $($_.Message)" }) -join '; '))
     }
 
     It 'targets the family tenant and nothing else' {
