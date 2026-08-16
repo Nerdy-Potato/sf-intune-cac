@@ -61,3 +61,5 @@ local plan cannot change the tenant even by accident.
 - [Age tiers](docs/age-tiers.md) - the privilege model, and how to move a child up a tier.
 - [Bootstrap](docs/bootstrap.md) - the one-time setup of the federated identities and environments.
 - [Operations](docs/operations.md) - routine changes, drift, emergencies and rollback.
+- [Enterprise child enrollment](docs/enterprise-child-enrollment.md) - corporate-owned enrollment,
+  approved apps, MDE and forced Global Secure Access.

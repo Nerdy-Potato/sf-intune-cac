@@ -38,6 +38,19 @@ Describe 'Repository configuration' {
         ($script:Config.Users | Where-Object id -EQ 'lucas').tier | Should -Be 'child'
     }
 
+    It 'confirms the three youngest children in the child tier' {
+        $youngest = @($script:Config.Users | Where-Object id -in @('emmerick', 'broderick', 'cullen'))
+        $youngest.Count | Should -Be 3
+        $youngest.tier | Should -Be @('child', 'child', 'child')
+        $youngest.ageTierConfirmed | Should -Be @($true, $true, $true)
+    }
+
+    It 'defines the assigned Autopilot device preparation group with no static members' {
+        $group = $script:Config.Groups | Where-Object id -EQ 'sg-autopilot-device-preparation-child'
+        $group.members | Should -BeNullOrEmpty
+        $group.membership.source | Should -Be 'explicit'
+    }
+
     It 'places the adult child in the tier with security-only controls' {
         ($script:Config.Users | Where-Object id -EQ 'samantha').tier | Should -Be 'young-adult'
         @($script:Config.Policies | Where-Object { $_.assignments.group -contains 'sg-tier-young-adult' }) | Should -BeNullOrEmpty
@@ -72,6 +85,16 @@ Describe 'Repository configuration' {
             $policy.payload.description | Should -BeLike "*$($script:Config.Tenant.managedMarker)*"
             $policy.payload.displayName | Should -BeLike "$($script:Config.Tenant.namePrefix) - *"
         }
+    }
+
+    It 'keeps the child app catalog explicit and scoped only to the child tier' {
+        $script:Config.Apps.Count | Should -BeGreaterThan 0
+        foreach ($app in $script:Config.Apps) {
+            $app.assignments.group | Should -Be @('sg-tier-child')
+        }
+
+        ($script:Config.Apps | Where-Object id -in @('android-defender', 'ios-defender')).assignments.intent |
+            Should -Be @('required', 'required')
     }
 
     It 'puts the parents in a separate, earlier Windows update ring than everyone else' {

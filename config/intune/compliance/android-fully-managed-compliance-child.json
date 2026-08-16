@@ -1,0 +1,39 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": "Corporate-owned Android devices must be healthy, encrypted, current, and protected by MDE.",
+  "name": "android-fully-managed-compliance-child",
+  "resource": "deviceCompliancePolicies",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.androidDeviceOwnerCompliancePolicy",
+    "displayName": "CaC - Android - Fully Managed Compliance (Child)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "deviceThreatProtectionEnabled": true,
+    "deviceThreatProtectionRequiredSecurityLevel": "secured",
+    "advancedThreatProtectionRequiredSecurityLevel": "secured",
+    "securityBlockJailbrokenDevices": true,
+    "securityRequireSafetyNetAttestationBasicIntegrity": true,
+    "securityRequireSafetyNetAttestationCertifiedDevice": true,
+    "securityRequireIntuneAppIntegrity": true,
+    "requireNoPendingSystemUpdates": true,
+    "osMinimumVersion": "11",
+    "passwordRequired": true,
+    "passwordMinimumLength": 6,
+    "passwordRequiredType": "numericComplex",
+    "passwordMinutesOfInactivityBeforeLock": 5,
+    "storageRequireEncryption": true,
+    "scheduledActionsForRule": [
+      {
+        "ruleName": "PasswordRequired",
+        "scheduledActionConfigurations": [
+          {
+            "actionType": "block",
+            "gracePeriodHours": 0,
+            "notificationTemplateId": "",
+            "notificationMessageCCList": []
+          }
+        ]
+      }
+    ]
+  }
+}

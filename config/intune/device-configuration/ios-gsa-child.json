@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Microsoft Defender supplies the iOS GSA client. This forced on-demand profile silently onboards",
+    "it, sends every domain through GSA, and prevents the child from disabling automatic VPN."
+  ],
+  "name": "ios-gsa-child",
+  "resource": "deviceConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.iosVpnConfiguration",
+    "displayName": "CaC - iOS - Global Secure Access (Child)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "connectionName": "Microsoft Defender for Endpoint",
+    "connectionType": "customVpn",
+    "server": {
+      "description": "Local GSA tunnel",
+      "address": "127.0.0.1",
+      "isDefaultServer": true
+    },
+    "identifier": "com.microsoft.scmx",
+    "customKeyValueData": [
+      { "name": "EnableGSA", "value": "3" },
+      { "name": "SilentOnboard", "value": "True" }
+    ],
+    "enableSplitTunneling": false,
+    "authenticationMethod": "usernameAndPassword",
+    "enablePerApp": false,
+    "onDemandRules": [
+      {
+        "action": "connect",
+        "interfaceTypeMatch": "notConfigured"
+      }
+    ],
+    "disableOnDemandUserOverride": true
+  }
+}

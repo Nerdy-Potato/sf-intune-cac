@@ -14,8 +14,10 @@
       "enum": [
         "deviceCompliancePolicies",
         "deviceConfigurations",
+        "deviceEnrollmentConfigurations",
         "iosManagedAppProtections",
         "androidManagedAppProtections"
+        ,"mobileAppConfigurations"
       ]
     },
     "enabled": { "type": "boolean" },
@@ -32,6 +34,11 @@
           }
         }
       }
+    },
+    "targetApps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
     },
     "assignments": {
       "type": "array",

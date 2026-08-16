@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Nerdy-Potato/sf-intune-cac/schemas/apps.schema.json",
+  "title": "Approved Intune applications",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apps"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "comment": { "type": ["string", "array"] },
+    "apps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "platform", "source", "payload", "assignments"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "platform": { "type": "string", "enum": ["android", "ios", "windows"] },
+          "source": { "type": "string", "enum": ["managedGooglePlay", "iosStore", "existing"] },
+          "payload": {
+            "type": "object",
+            "required": ["@odata.type", "displayName", "description", "publisher"],
+            "properties": {
+              "@odata.type": { "type": "string", "pattern": "^#microsoft\\.graph\\." },
+              "displayName": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "minLength": 1 },
+              "publisher": { "type": "string", "minLength": 1 }
+            }
+          },
+          "assignments": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["group", "intent"],
+              "properties": {
+                "group": { "type": "string", "minLength": 1 },
+                "intent": { "type": "string", "enum": ["required", "available", "uninstall"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

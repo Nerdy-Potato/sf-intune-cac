@@ -8,7 +8,7 @@ parents, because a compromised adult account is worse than a compromised child a
 | `adult` | John, Robin | Security only. No content or app restrictions. First Windows update ring. |
 | `young-adult` | Samantha (18) | Security only. Deliberately has **no** restriction policy assigned. |
 | `teen` | 14-17 | Security, plus light content controls. Apps are blocklisted, not allowlisted. |
-| `child` | 13 and under (Lucas) | Strictest. Store blocked, approved apps only, tight web and media controls. |
+| `child` | 13 and under (Lucas, Emmerick, Broderick, Cullen) | Strictest. Corporate-owned devices, approved apps only, forced GSA, tight web and media controls. |
 | `admin` | johnspaid | Administrative account. No productivity workloads. |
 | `excluded` | mauricemoss, robertjohnson | Break-glass. Excluded from everything by design. |
 
@@ -25,7 +25,7 @@ repository is public history, and none of the policy decisions need more precisi
 
 ## Unconfirmed tiers default to the strictest fit
 
-Only two ages were stated by the tenant owner: Samantha is 18 and Lucas is 13. Every other child is
+The tenant owner confirmed Emmerick, Broderick, and Cullen for the child tier. Every other unconfirmed child is
 marked `"ageTierConfirmed": false` and placed in the **most restrictive** tier that could apply
 (`child`).
 
@@ -34,7 +34,7 @@ Store is blocked - not a 12 year old with an unrestricted device. Validation rai
 every unconfirmed account so the gap stays visible in every pull request and never quietly becomes
 permanent.
 
-> **Action required:** confirm the tiers for Adalynn, Emmerick, Broderick and Cullen and move them
+> **Action required:** confirm the tier for Adalynn and move it
 > in the same way as any other change - one pull request, reviewed plan.
 
 ## Moving somebody up a tier
@@ -50,16 +50,6 @@ Birthdays are a normal, reviewed change:
 Nothing else needs editing. Group membership is calculated from the tier, so the tier is the only
 place that knowledge lives.
 
-## Where the tiers do not reach yet
-
-Two things the tenant owner called out are not implemented in this repository yet, because both
-need policy types the engine does not support:
-
-- **Forced Global Secure Access for the child tier.** GSA profiles are managed through settings
-  catalog and network access policies.
-- **Explicit app allowlisting.** The Store is blocked for the child tier, which enforces the
-  *effect* today (only assigned apps can be installed), but the approved app list itself is not yet
-  declared here.
-
-Both are tracked in [architecture.md](architecture.md#adding-a-policy-type) behind settings catalog
-support.
+The child tier also owns an explicit app catalog. Defender and authentication clients are required;
+the approved Microsoft 365 apps are available for self-service installation. Adding any other app is
+a reviewed change to `config/apps/approved-child-apps.json`.

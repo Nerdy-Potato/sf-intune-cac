@@ -1,0 +1,61 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Child accounts may enroll only corporate-owned Android, iOS/iPadOS, and Windows devices.",
+    "Android must use a corporate-owned fully managed token; Apple uses ADE; Windows uses Autopilot."
+  ],
+  "name": "child-corporate-only-enrollment",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionsConfiguration",
+    "displayName": "CaC - Enrollment - Corporate-Owned Child Devices",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 1,
+    "androidRestriction": {
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    },
+    "androidForWorkRestriction": {
+      "platformBlocked": false,
+      "personalDeviceEnrollmentBlocked": true,
+      "osMinimumVersion": "11",
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    },
+    "iosRestriction": {
+      "platformBlocked": false,
+      "personalDeviceEnrollmentBlocked": true,
+      "osMinimumVersion": "16.0",
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    },
+    "windowsRestriction": {
+      "platformBlocked": false,
+      "personalDeviceEnrollmentBlocked": true,
+      "osMinimumVersion": "10.0.19045",
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    },
+    "windowsHomeSkuRestriction": {
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    },
+    "windowsMobileRestriction": {
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    },
+    "macOSRestriction": {
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}

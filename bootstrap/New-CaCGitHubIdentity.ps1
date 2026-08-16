@@ -70,6 +70,7 @@ $applications = @(
         Roles   = @(
             'DeviceManagementConfiguration.Read.All'
             'DeviceManagementApps.Read.All'
+            'DeviceManagementServiceConfig.Read.All'
             'Group.Read.All'
             'User.Read.All'
         )
@@ -84,6 +85,7 @@ $applications = @(
         Roles   = @(
             'DeviceManagementConfiguration.ReadWrite.All'
             'DeviceManagementApps.ReadWrite.All'
+            'DeviceManagementServiceConfig.ReadWrite.All'
             'Group.ReadWrite.All'
             'User.Read.All'
         )
