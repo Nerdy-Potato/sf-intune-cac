@@ -1,0 +1,40 @@
+name: Drift detection
+
+on:
+  schedule:
+    # 07:00 UTC daily - before the family is likely to be using anything.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  drift:
+    name: Detect drift between the tenant and this repository
+    runs-on: ubuntu-latest
+    environment: plan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Produce plan (read-only)
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: ./scripts/Invoke-CaC.ps1 -Mode plan
+
+      - name: Fail if the tenant no longer matches the repository
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $plan = Get-Content -Path ./out/plan.json -Raw | ConvertFrom-Json
+          $changes = @($plan | Where-Object { $_.Action -notin @('NoChange', 'Skip') })
+
+          if ($changes) {
+            $changes | ForEach-Object { Write-Host "::warning::$($_.Action) $($_.Kind) $($_.Target)" }
+            throw "$($changes.Count) drift item(s) detected. Somebody changed the tenant outside this repository, or a deployment did not finish."
+          }
+
+          Write-Host 'No drift.'
