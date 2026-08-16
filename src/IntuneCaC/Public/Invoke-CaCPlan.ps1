@@ -89,20 +89,76 @@ function Invoke-CaCPlan {
     }
 
     $policyIds = @{}
+    $appIds = @{}
+
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'App' -and $_.Action -in @('Create', 'Update') })) {
+        $app = if ($action.Action -eq 'Create') { $action.Data } else { $action.Data.App }
+        if (-not $PSCmdlet.ShouldProcess($action.Target, "$($action.Action) app")) { continue }
+
+        if ($action.Action -eq 'Create') {
+            $created = & $GraphInvoker 'POST' 'deviceAppManagement/mobileApps' $app.payload
+            $appIds[$app.id] = $created.id
+        }
+        else {
+            $appIds[$app.id] = $action.Data.Id
+            & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($action.Data.Id)" $app.payload | Out-Null
+        }
+
+        Add-Result -Action "$($action.Action) app" -Target $action.Target -Status 'Applied' -Message ($action.Details -join '; ')
+    }
+
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'AppAssignment' })) {
+        $app = if ($action.Data.PSObject.Properties['App']) { $action.Data.App } else { $action.Data }
+        $appId = if ($appIds.ContainsKey($app.id)) {
+            $appIds[$app.id]
+        }
+        elseif ($action.Data.PSObject.Properties['Id']) {
+            $action.Data.Id
+        }
+        else {
+            $null
+        }
+
+        if (-not $appId) {
+            Add-Result -Action 'Assign app' -Target $action.Target -Status 'Skipped' -Message 'app id could not be resolved'
+            continue
+        }
+        if (-not $PSCmdlet.ShouldProcess($action.Target, 'Assign app')) { continue }
+
+        $assignments = @($app.assignments | ForEach-Object {
+                @{
+                    intent = $_.intent
+                    target = Get-CaCAssignmentTarget -Assignment $_ -GroupObjectIds $groupObjectIds
+                }
+            })
+        if ($action.Data.PSObject.Properties['PreservedAssignments']) {
+            $assignments += @($action.Data.PreservedAssignments)
+        }
+        & $GraphInvoker 'POST' "deviceAppManagement/mobileApps/$appId/assign" @{ mobileAppAssignments = $assignments } | Out-Null
+        Add-Result -Action 'Assign app' -Target $action.Target -Status 'Applied' -Message ($action.Details -join '; ')
+    }
+
+    $remoteApps = @((& $GraphInvoker 'GET' 'deviceAppManagement/mobileApps' $null).value | Where-Object { $_ })
+    foreach ($app in $Configuration.Apps) {
+        if ($appIds.ContainsKey($app.id)) { continue }
+        $remote = Find-CaCRemoteApp -App $app -RemoteApps $remoteApps
+        if ($remote) { $appIds[$app.id] = $remote.id }
+    }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -in @('Create', 'Update') })) {
         $policy = if ($action.Action -eq 'Create') { $action.Data } else { $action.Data.Policy }
         $endpoint = Get-CaCResourceMap -Resource $policy.resource
 
         if (-not $PSCmdlet.ShouldProcess($action.Target, "$($action.Action) policy")) { continue }
+        $payload = Get-CaCPolicyPayload -Policy $policy -AppObjectIds $appIds
 
         if ($action.Action -eq 'Create') {
-            $created = & $GraphInvoker 'POST' $endpoint.Path $policy.payload
+            $created = & $GraphInvoker 'POST' $endpoint.Path $payload
             $policyIds[$policy.payload.displayName] = $created.id
         }
         else {
             $policyIds[$policy.payload.displayName] = $action.Data.Id
-            & $GraphInvoker 'PATCH' "$($endpoint.Path)/$($action.Data.Id)" $policy.payload | Out-Null
+            & $GraphInvoker 'PATCH' "$($endpoint.Path)/$($action.Data.Id)" $payload | Out-Null
         }
 
         if ($endpoint.SupportsApps -and (Test-CaCHasProperty -InputObject $policy -Name 'apps')) {
@@ -139,7 +195,9 @@ function Invoke-CaCPlan {
                 @{ target = Get-CaCAssignmentTarget -Assignment $_ -GroupObjectIds $groupObjectIds }
             })
 
-        & $GraphInvoker 'POST' "$($endpoint.Path)/$policyId/$($endpoint.AssignAction)" @{ assignments = $assignments } | Out-Null
+        $assignmentBodyName = if ($endpoint.ContainsKey('AssignmentBodyName')) { $endpoint.AssignmentBodyName } else { 'assignments' }
+        $assignmentBody = @{ $assignmentBodyName = $assignments }
+        & $GraphInvoker 'POST' "$($endpoint.Path)/$policyId/$($endpoint.AssignAction)" $assignmentBody | Out-Null
         Add-Result -Action 'Assign policy' -Target $action.Target -Status 'Applied' -Message ($action.Details -join '; ')
     }
 

@@ -15,6 +15,8 @@ BeforeAll {
         $state = @{
             Groups      = @()
             Members     = @{}
+            Apps        = @()
+            AppAssignments = @{}
             Policies    = @{}
             Assignments = @{}
             Calls       = [System.Collections.Generic.List[object]]::new()
@@ -48,6 +50,41 @@ BeforeAll {
                         [pscustomobject]@{ target = [pscustomobject]@{ '@odata.type' = $type; groupId = $groupObjectId } }
                     })
             }
+
+            $appIndex = 0
+            foreach ($app in $script:Config.Apps) {
+                $appIndex++
+                $remote = [ordered]@{ id = "app-$appIndex" }
+                foreach ($key in $app.payload.Keys) {
+                    $remote[$key] = $app.payload[$key]
+                }
+                $state.Apps += [pscustomobject] $remote
+                $state.AppAssignments["app-$appIndex"] = @($app.assignments | ForEach-Object {
+                        $groupObjectId = ($state.Groups | Where-Object displayName -EQ ($script:Config.Groups | Where-Object id -EQ $_.group).displayName).id
+                        [pscustomobject]@{
+                            intent = $_.intent
+                            target = [pscustomobject]@{
+                                '@odata.type' = '#microsoft.graph.groupAssignmentTarget'
+                                groupId       = $groupObjectId
+                            }
+                        }
+                    })
+            }
+
+            foreach ($policy in $script:Config.Policies | Where-Object { $_.targetApps }) {
+                $remotePolicy = $state.Policies[$policy.resource] |
+                    Where-Object displayName -EQ $policy.payload.displayName |
+                    Select-Object -First 1
+                $targetIds = @($policy.targetApps | ForEach-Object {
+                        $targetApp = $script:Config.Apps | Where-Object id -EQ $_
+                        ($state.Apps | Where-Object {
+                                $_.packageId -eq $targetApp.payload.packageId -or
+                                $_.bundleId -eq $targetApp.payload.bundleId -or
+                                $_.displayName -eq $targetApp.payload.displayName
+                            } | Select-Object -First 1).id
+                    })
+                $remotePolicy | Add-Member -NotePropertyName targetedMobileApps -NotePropertyValue $targetIds
+            }
         }
 
         foreach ($extra in $ExtraPolicies) {
@@ -72,6 +109,10 @@ BeforeAll {
                 '^groups\?' { return [pscustomobject]@{ value = $State.Groups } }
                 '^users/' { return [pscustomobject]@{ id = "user-object-$($State.Calls.Count)" } }
                 '^groups/(?<id>[^/]+)/members' { return [pscustomobject]@{ value = @($State.Members[$Matches.id]) } }
+                '^deviceAppManagement/mobileApps$' { return [pscustomobject]@{ value = $State.Apps } }
+                '^deviceAppManagement/mobileApps/(?<id>[^/]+)/assignments$' {
+                    return [pscustomobject]@{ value = @($State.AppAssignments[$Matches.id]) }
+                }
                 '/assignments$' {
                     $policyId = ($Uri -split '/')[-2]
                     return [pscustomobject]@{ value = @($State.Assignments[$policyId]) }
@@ -100,6 +141,16 @@ Describe 'New-CaCPlan' {
         It 'creates every enabled policy defined in the repository' {
             $created = @($script:EmptyPlan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'Create' })
             $created.Count | Should -Be @($script:Config.Policies | Where-Object enabled).Count
+        }
+
+        It 'creates every approved app that can be sourced programmatically' {
+            $created = @($script:EmptyPlan | Where-Object { $_.Kind -eq 'App' -and $_.Action -eq 'Create' })
+            $created.Count | Should -Be @($script:Config.Apps | Where-Object source -NE 'existing').Count
+        }
+
+        It 'reports prepackaged Windows apps as explicit prerequisites' {
+            $prerequisites = @($script:EmptyPlan | Where-Object { $_.Kind -eq 'App' -and $_.Action -eq 'Prerequisite' })
+            $prerequisites.Count | Should -Be @($script:Config.Apps | Where-Object source -EQ 'existing').Count
         }
 
         It 'never proposes a deletion when the tenant is empty' {
@@ -275,6 +326,27 @@ Describe 'Invoke-CaCPlan' {
         $null = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
 
         @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'preserves app assignments outside the child app catalog scope' {
+        $state = New-FakeTenant -InSync
+        $app = $state.Apps | Where-Object packageId -EQ 'com.microsoft.scmx' | Select-Object -First 1
+        $state.AppAssignments[$app.id] = @([pscustomobject]@{
+            intent = 'required'
+            target = [pscustomobject]@{
+                '@odata.type' = '#microsoft.graph.groupAssignmentTarget'
+                groupId       = 'external-group'
+            }
+        })
+
+        $invoker = New-FakeInvoker -State $state
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $invoker
+        $null = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+
+        $write = $state.Calls | Where-Object {
+            $_.Method -eq 'POST' -and $_.Uri -eq "deviceAppManagement/mobileApps/$($app.id)/assign"
+        } | Select-Object -Last 1
+        $write.Body.mobileAppAssignments.target.groupId | Should -Contain 'external-group'
     }
 
     It 'supports -WhatIf so a change can be rehearsed without touching the tenant' {

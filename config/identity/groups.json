@@ -56,6 +56,14 @@
       "membership": { "source": "accountType", "values": ["productivity"] }
     },
     {
+      "id": "sg-autopilot-device-preparation-child",
+      "displayName": "CaC-Autopilot-DevicePreparation-Child",
+      "mailNickname": "cac-autopilot-device-preparation-child",
+      "description": "Assigned device group populated by Windows Autopilot device preparation for child devices.",
+      "purpose": "assignment",
+      "membership": { "source": "explicit", "values": [] }
+    },
+    {
       "id": "sg-breakglass",
       "displayName": "CaC-BreakGlass",
       "mailNickname": "cac-breakglass",

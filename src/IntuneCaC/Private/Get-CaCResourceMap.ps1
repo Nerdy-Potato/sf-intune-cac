@@ -24,6 +24,12 @@ function Get-CaCResourceMap {
             AssignAction = 'assign'
             SupportsApps = $false
         }
+        deviceEnrollmentConfigurations = @{
+            Path               = 'deviceManagement/deviceEnrollmentConfigurations'
+            AssignAction       = 'assign'
+            AssignmentBodyName = 'enrollmentConfigurationAssignments'
+            SupportsApps       = $false
+        }
         iosManagedAppProtections     = @{
             Path         = 'deviceAppManagement/iosManagedAppProtections'
             AssignAction = 'assign'
@@ -33,6 +39,12 @@ function Get-CaCResourceMap {
             Path         = 'deviceAppManagement/androidManagedAppProtections'
             AssignAction = 'assign'
             SupportsApps = $true
+        }
+        mobileAppConfigurations      = @{
+            Path               = 'deviceAppManagement/mobileAppConfigurations'
+            AssignAction       = 'assign'
+            SupportsApps       = $false
+            SupportsTargetApps = $true
         }
     }
 

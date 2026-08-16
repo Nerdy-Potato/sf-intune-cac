@@ -20,6 +20,17 @@ function Get-CaCConfiguration {
     $tenant = Get-Content -Path (Join-Path $root 'tenant.json') -Raw | ConvertFrom-Json -AsHashtable
     $users = (Get-Content -Path (Join-Path $root 'identity/users.json') -Raw | ConvertFrom-Json -AsHashtable).users
     $groups = (Get-Content -Path (Join-Path $root 'identity/groups.json') -Raw | ConvertFrom-Json -AsHashtable).groups
+    $apps = [System.Collections.Generic.List[object]]::new()
+    $appRoot = Join-Path $root 'apps'
+    if (Test-Path -Path $appRoot) {
+        foreach ($file in Get-ChildItem -Path $appRoot -Filter '*.json' -Recurse | Sort-Object FullName) {
+            $document = Get-Content -Path $file.FullName -Raw | ConvertFrom-Json -AsHashtable
+            foreach ($app in $document.apps) {
+                $app['sourcePath'] = $file.FullName.Substring($root.Length).TrimStart([char]'/', [char]'\')
+                $apps.Add($app)
+            }
+        }
+    }
 
     $primaryDomain = if ($tenant.primaryDomain) { $tenant.primaryDomain } else { $tenant.fallbackDomain }
 
@@ -61,6 +72,7 @@ function Get-CaCConfiguration {
         PrimaryDomain = $primaryDomain
         Users         = $users
         Groups        = $groups
+        Apps          = $apps.ToArray()
         Policies      = $policies.ToArray()
     }
 }

@@ -1,0 +1,39 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Corporate-owned fully managed Android baseline. Public app installation and account changes are",
+    "blocked; approved Managed Google Play apps remain deployable by Intune."
+  ],
+  "name": "android-fully-managed-restrictions-child",
+  "resource": "deviceConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.androidDeviceOwnerGeneralDeviceConfiguration",
+    "displayName": "CaC - Android - Fully Managed Restrictions (Child)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "enrollmentProfile": "fullyManaged",
+    "accountsBlockModification": true,
+    "appsAllowInstallFromUnknownSources": false,
+    "appsAutoUpdatePolicy": "always",
+    "appsDefaultPermissionPolicy": "prompt",
+    "bluetoothBlockConfiguration": true,
+    "cameraBlocked": false,
+    "dateTimeConfigurationBlocked": true,
+    "factoryResetBlocked": true,
+    "googleAccountsBlocked": true,
+    "networkEscapeHatchAllowed": false,
+    "nfcBlockOutgoingBeam": true,
+    "passwordBlockKeyguardFeatures": ["trustAgents", "fingerprint", "face"],
+    "passwordMinimumLength": 6,
+    "passwordRequiredType": "numericComplex",
+    "passwordMinutesOfInactivityBeforeScreenTimeout": 5,
+    "screenCaptureBlocked": true,
+    "securityDeveloperSettingsEnabled": false,
+    "securityRequireVerifyApps": true,
+    "storageBlockExternalMedia": true,
+    "storageBlockUsbFileTransfer": true,
+    "systemUpdateInstallType": "automatic",
+    "usersBlockAdd": true,
+    "usersBlockRemove": true
+  }
+}

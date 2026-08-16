@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "The GSA Android client is built into Defender. Value 3 enables it by default and removes the",
+    "user's ability to disable it. The profile applies only to Android Device Owner enrollment."
+  ],
+  "name": "android-defender-gsa-child",
+  "resource": "mobileAppConfigurations",
+  "targetApps": ["android-defender"],
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.androidManagedStoreAppConfiguration",
+    "displayName": "CaC - Android - Defender and GSA (Child)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "packageId": "com.microsoft.scmx",
+    "profileApplicability": "androidDeviceOwner",
+    "payloadJson": "{\"kind\":\"androidenterprise#managedConfiguration\",\"productId\":\"app:com.microsoft.scmx\",\"managedProperty\":[{\"key\":\"Global Secure Access\",\"valueString\":\"3\"},{\"key\":\"GlobalSecureAccessPrivateChannel\",\"valueString\":\"3\"}]}",
+    "permissionActions": []
+  }
+}

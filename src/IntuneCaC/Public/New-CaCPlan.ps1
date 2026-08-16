@@ -77,6 +77,50 @@ function New-CaCPlan {
         }
     }
 
+    $remoteApps = @((& $GraphInvoker 'GET' 'deviceAppManagement/mobileApps' $null).value | Where-Object { $_ })
+    $appObjectIds = @{}
+    foreach ($app in $Configuration.Apps) {
+        $remote = Find-CaCRemoteApp -App $app -RemoteApps $remoteApps
+
+        if (-not $remote) {
+            if ($app.source -eq 'existing') {
+                Add-Action -Kind 'App' -Action 'Prerequisite' -Target $app.payload.displayName -Data $app -Details @(
+                    'package must be added to Intune before deployment can assign it'
+                )
+                continue
+            }
+
+            Add-Action -Kind 'App' -Action 'Create' -Target $app.payload.displayName -Data $app -Details @(
+                "source: $($app.source)"
+            )
+            Add-Action -Kind 'AppAssignment' -Action 'Update' -Target $app.payload.displayName -Data $app -Details @(
+                ($app.assignments | ForEach-Object { "$($_.intent) $($_.group)" })
+            )
+            continue
+        }
+
+        $appObjectIds[$app.id] = $remote.id
+        $drift = Get-CaCPayloadDrift -Desired $app.payload -Actual $remote
+        if ($drift) {
+            Add-Action -Kind 'App' -Action 'Update' -Target $app.payload.displayName -Details $drift -Data ([pscustomobject]@{
+                    App = $app
+                    Id  = $remote.id
+                })
+        }
+        else {
+            Add-Action -Kind 'App' -Action 'NoChange' -Target $app.payload.displayName
+        }
+
+        $assignmentDrift = Get-CaCAppAssignmentDrift -App $app -RemoteId $remote.id -GroupObjectIds $groupObjectIds -GraphInvoker $GraphInvoker
+        if ($assignmentDrift) {
+            Add-Action -Kind 'AppAssignment' -Action 'Update' -Target $app.payload.displayName -Details $assignmentDrift -Data ([pscustomobject]@{
+                    App                  = $app
+                    Id                   = $remote.id
+                    PreservedAssignments = @(Get-CaCPreservedAppAssignments -App $app -RemoteId $remote.id -GroupObjectIds $groupObjectIds -GraphInvoker $GraphInvoker)
+                })
+        }
+    }
+
     $resourceMap = Get-CaCResourceMap
     $policiesByResource = $Configuration.Policies | Group-Object -Property { $_.resource }
 
@@ -101,7 +145,20 @@ function New-CaCPlan {
                 continue
             }
 
-            $drift = Get-CaCPayloadDrift -Desired $policy.payload -Actual $remote
+            $targetResolutionError = $null
+            $desiredPayload = try {
+                Get-CaCPolicyPayload -Policy $policy -AppObjectIds $appObjectIds
+            }
+            catch {
+                $targetResolutionError = $_.Exception.Message
+                $policy.payload
+            }
+            $drift = if ($targetResolutionError) {
+                @("target app dependency: $targetResolutionError")
+            }
+            else {
+                Get-CaCPayloadDrift -Desired $desiredPayload -Actual $remote
+            }
 
             if ($drift) {
                 Add-Action -Kind 'Policy' -Action 'Update' -Target $policy.payload.displayName -Details $drift -Data ([pscustomobject]@{

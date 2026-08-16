@@ -62,7 +62,7 @@
       "domain": "primary",
       "accountType": "productivity",
       "tier": "child",
-      "ageTierConfirmed": false
+      "ageTierConfirmed": true
     },
     {
       "id": "broderick",
@@ -71,7 +71,7 @@
       "domain": "primary",
       "accountType": "productivity",
       "tier": "child",
-      "ageTierConfirmed": false
+      "ageTierConfirmed": true
     },
     {
       "id": "cullen",
@@ -80,7 +80,7 @@
       "domain": "primary",
       "accountType": "productivity",
       "tier": "child",
-      "ageTierConfirmed": false
+      "ageTierConfirmed": true
     },
     {
       "id": "johnspaid",

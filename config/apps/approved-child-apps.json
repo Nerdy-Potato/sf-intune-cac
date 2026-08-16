@@ -1,0 +1,364 @@
+{
+  "$schema": "../../schemas/apps.schema.json",
+  "comment": [
+    "This is the child-tier allowlist. Required security clients install automatically; productivity",
+    "apps are available in Company Portal but cannot be installed until explicitly declared here.",
+    "Android entries are added through the Managed Google Play connector configured in the tenant."
+  ],
+  "apps": [
+    {
+      "id": "android-defender",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft Defender",
+        "description": "Required MDE and Global Secure Access client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.scmx",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.scmx"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+    },
+    {
+      "id": "android-authenticator",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft Authenticator",
+        "description": "Required Entra device registration and authentication client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.azure.authenticator",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.azure.authenticator"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+    },
+    {
+      "id": "android-m365-copilot",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft 365 Copilot",
+        "description": "Approved Microsoft 365 productivity and Copilot client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.office.officehubrow",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.officehubrow"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-word",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft Word",
+        "description": "Approved Microsoft Word client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.office.word",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.word"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-excel",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft Excel",
+        "description": "Approved Microsoft Excel client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.office.excel",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.excel"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-powerpoint",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft PowerPoint",
+        "description": "Approved Microsoft PowerPoint client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.office.powerpoint",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.powerpoint"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-onenote",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft OneNote",
+        "description": "Approved Microsoft OneNote client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.office.onenote",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.onenote"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-outlook",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft Outlook",
+        "description": "Approved Microsoft Outlook client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.office.outlook",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.outlook"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-teams",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft Teams",
+        "description": "Approved Microsoft Teams client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.teams",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.teams"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-onedrive",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft OneDrive",
+        "description": "Approved Microsoft OneDrive client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.skydrive",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.skydrive"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "android-edge",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Microsoft Edge",
+        "description": "Approved Microsoft Edge client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.emmx",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.emmx"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-defender",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft Defender",
+        "description": "Required MDE and Global Secure Access client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.scmx",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-defender-security/id1526737990",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+    },
+    {
+      "id": "ios-authenticator",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft Authenticator",
+        "description": "Required Entra device registration and authentication client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.azureauthenticator",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-authenticator/id983156458",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+    },
+    {
+      "id": "ios-m365-copilot",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft 365 Copilot",
+        "description": "Approved Microsoft 365 productivity and Copilot client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.officemobile",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-365-copilot/id541164041",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-word",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft Word",
+        "description": "Approved Microsoft Word client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.Office.Word",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-word/id586447913",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-excel",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft Excel",
+        "description": "Approved Microsoft Excel client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.Office.Excel",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-excel/id586683407",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-powerpoint",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft PowerPoint",
+        "description": "Approved Microsoft PowerPoint client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.Office.Powerpoint",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-powerpoint/id586449534",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-onenote",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft OneNote",
+        "description": "Approved Microsoft OneNote client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.onenote",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-onenote/id410395246",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-outlook",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft Outlook",
+        "description": "Approved Microsoft Outlook client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.Office.Outlook",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-outlook/id951937596",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-teams",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft Teams",
+        "description": "Approved Microsoft Teams client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.skype.teams",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-teams/id1113153706",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-onedrive",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft OneDrive",
+        "description": "Approved Microsoft OneDrive client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.skydrive",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-onedrive/id477537958",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "ios-edge",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Microsoft Edge",
+        "description": "Approved Microsoft Edge client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.msedge",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-edge/id1288723196",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "windows-m365-apps",
+      "platform": "windows",
+      "source": "existing",
+      "payload": {
+        "@odata.type": "#microsoft.graph.officeSuiteApp",
+        "displayName": "Microsoft 365 Apps for Windows",
+        "description": "Approved Word, Excel, PowerPoint, Outlook, OneNote, Teams and OneDrive suite. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+    },
+    {
+      "id": "windows-gsa-client",
+      "platform": "windows",
+      "source": "existing",
+      "payload": {
+        "@odata.type": "#microsoft.graph.win32LobApp",
+        "displayName": "Global Secure Access Client",
+        "description": "Required Global Secure Access client package downloaded from the tenant portal. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation"
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+    }
+  ]
+}

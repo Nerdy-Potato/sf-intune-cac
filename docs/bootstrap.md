@@ -21,13 +21,14 @@ It creates, idempotently:
 
 | Application | Graph application roles | Federated subjects |
 | --- | --- | --- |
-| `sf-intune-cac-plan` | `DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `Group.Read.All`, `User.Read.All` | `repo:Nerdy-Potato/sf-intune-cac:pull_request`, `repo:Nerdy-Potato/sf-intune-cac:environment:plan` |
-| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `Group.ReadWrite.All`, `User.Read.All` | `repo:Nerdy-Potato/sf-intune-cac:environment:production` |
+| `sf-intune-cac-plan` | `DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `DeviceManagementServiceConfig.Read.All`, `Group.Read.All`, `User.Read.All` | `repo:Nerdy-Potato/sf-intune-cac:pull_request`, `repo:Nerdy-Potato/sf-intune-cac:environment:plan` |
+| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `DeviceManagementServiceConfig.ReadWrite.All`, `Group.ReadWrite.All`, `User.Read.All` | `repo:Nerdy-Potato/sf-intune-cac:environment:production` |
 
 No client secrets are created. Both applications authenticate by exchanging GitHub's short-lived
 OIDC token, so there is nothing stored in GitHub and nothing to rotate.
 
-Re-running the script is safe: it reconciles rather than duplicating.
+Re-running the script is safe: it reconciles rather than duplicating. Re-run it after pulling a
+change that adds a Graph role; existing applications are updated in place.
 
 ## 2. Set the repository variables
 
@@ -76,7 +77,20 @@ Two things still need a decision from the tenant owner before the first apply:
 
 ## 6. First run
 
+Before creating a Windows Autopilot device preparation policy, establish the Microsoft-owned
+provisioning identity and assigned device group:
+
+```powershell
+Connect-MgGraph -Scopes Application.ReadWrite.All,Group.ReadWrite.All,Organization.Read.All
+./bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1 -WhatIf
+./bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1
+```
+
+This follows Microsoft's documented requirement: service principal AppId
+`f1346770-5b25-470b-88bd-d5744ab7952c` is created if absent and made owner of
+`CaC-Autopilot-DevicePreparation-Child`.
+
 The first deployment against a tenant that has never been touched by this repository will create
-seven groups and eleven policies. Read that plan carefully; it is the largest one that will ever be
+eight groups, the approved mobile app catalog, and the configured policies. Read that plan carefully; it is the largest one that will ever be
 produced. Consider running the deployment on a workday morning rather than a Friday evening - a
 compliance policy landing badly costs somebody their mail on their phone.

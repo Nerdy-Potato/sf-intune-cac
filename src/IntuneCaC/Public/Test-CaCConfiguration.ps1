@@ -51,6 +51,9 @@ function Test-CaCConfiguration {
     Test-AgainstSchema -File (Join-Path $Configuration.Root 'tenant.json') -Schema 'tenant.schema.json'
     Test-AgainstSchema -File (Join-Path $Configuration.Root 'identity/users.json') -Schema 'users.schema.json'
     Test-AgainstSchema -File (Join-Path $Configuration.Root 'identity/groups.json') -Schema 'groups.schema.json'
+    foreach ($appFile in @($Configuration.Apps.sourcePath | Sort-Object -Unique)) {
+        Test-AgainstSchema -File (Join-Path $Configuration.Root $appFile) -Schema 'apps.schema.json'
+    }
 
     foreach ($policy in $Configuration.Policies) {
         Test-AgainstSchema -File (Join-Path $Configuration.Root $policy.sourcePath) -Schema 'policy.schema.json'
@@ -59,6 +62,32 @@ function Test-CaCConfiguration {
     $tenant = $Configuration.Tenant
     $groupsById = @{}
     foreach ($group in $Configuration.Groups) { $groupsById[$group.id] = $group }
+
+    $duplicateAppIds = $Configuration.Apps | Group-Object -Property { $_.id } | Where-Object Count -GT 1
+    foreach ($duplicate in $duplicateAppIds) {
+        Add-Finding -Severity 'Error' -Rule 'app/duplicate-id' -Target $duplicate.Name -Message 'More than one approved app uses this id.'
+    }
+
+    foreach ($app in $Configuration.Apps) {
+        $appMarker = 'Managed by sf-intune-cac.'
+        if ($app.payload.description -notlike "*$appMarker*") {
+            Add-Finding -Severity 'Error' -Rule 'app/managed-marker' -Target $app.id -Message `
+                ("description must contain the managed marker '{0}'." -f $appMarker)
+        }
+
+        foreach ($assignment in $app.assignments) {
+            if (-not $groupsById.ContainsKey($assignment.group)) {
+                Add-Finding -Severity 'Error' -Rule 'app/unknown-group' -Target $app.id -Message `
+                    ("Assignment references group '{0}', which is not defined in identity/groups.json." -f $assignment.group)
+                continue
+            }
+
+            if ($groupsById[$assignment.group].purpose -eq 'exclusion') {
+                Add-Finding -Severity 'Error' -Rule 'safety/exclusion-group-assigned' -Target $app.id -Message `
+                    ("Group '{0}' exists only as an exclusion target and must never have an app assigned to it." -f $assignment.group)
+            }
+        }
+    }
 
     if (-not $tenant.primaryDomain) {
         Add-Finding -Severity 'Warning' -Rule 'tenant/primary-domain' -Target 'tenant.json' -Message `
@@ -91,6 +120,15 @@ function Test-CaCConfiguration {
         }
         catch {
             Add-Finding -Severity 'Error' -Rule 'policy/resource' -Target $target -Message $_.Exception.Message
+        }
+
+        if (Test-CaCHasProperty -InputObject $policy -Name 'targetApps') {
+            foreach ($appId in $policy.targetApps) {
+                if ($appId -notin $Configuration.Apps.id) {
+                    Add-Finding -Severity 'Error' -Rule 'policy/unknown-target-app' -Target $target -Message `
+                        ("Target app '{0}' is not defined in the approved app catalog." -f $appId)
+                }
+            }
         }
 
         if ($policy.payload.description -notlike "*$($tenant.managedMarker)*") {
