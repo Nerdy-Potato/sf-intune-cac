@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "14-17. Deliberately lighter than the child tier: the Store is allowed, developer tools stay",
+    "usable, and Defender's UI is not hidden. Privileges increase with age; only the security",
+    "relevant settings are kept."
+  ],
+  "name": "windows-restrictions-teen",
+  "resource": "deviceConfigurations",
+  "assignments": [{ "group": "sg-tier-teen", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.windows10GeneralConfiguration",
+    "displayName": "CaC - Windows - Device Restrictions (Teen)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "windowsStoreBlocked": false,
+    "appsAllowTrustedAppsSideloading": "blocked",
+    "developerUnlockSetting": "blocked",
+    "smartScreenEnableAppInstallControl": true,
+    "defenderRequireRealTimeMonitoring": true,
+    "defenderRequireBehaviorMonitoring": true,
+    "defenderScanDownloads": true,
+    "edgeRequireSmartScreen": true,
+    "edgeBlockInPrivateBrowsing": true,
+    "edgeBlockPopups": true,
+    "storageRequireMobileDeviceEncryption": true
+  }
+}

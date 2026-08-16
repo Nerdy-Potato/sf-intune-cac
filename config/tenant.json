@@ -1,0 +1,14 @@
+{
+  "$schema": "../schemas/tenant.schema.json",
+  "displayName": "Nerdy Potato",
+  "fallbackDomain": "nerdypotato.onmicrosoft.com",
+  "primaryDomain": null,
+  "environment": "production",
+  "managedMarker": "Managed by sf-intune-cac. Do not edit in the portal.",
+  "namePrefix": "CaC",
+  "safety": {
+    "forbidAllUsersAssignment": true,
+    "forbidAllDevicesAssignment": true,
+    "requireExplicitDeleteApproval": true
+  }
+}

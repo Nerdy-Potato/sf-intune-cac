@@ -1,0 +1,67 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": "Android counterpart of the iOS app protection baseline. Same posture, Android-specific controls.",
+  "name": "android-app-protection-baseline",
+  "resource": "androidManagedAppProtections",
+  "assignments": [{ "group": "sg-productivity-all", "intent": "include" }],
+  "apps": [
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.office.outlook"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.skydrive"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.office.officehubrow"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.emmx"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.teams"
+      }
+    }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.androidManagedAppProtection",
+    "displayName": "CaC - Android - App Protection Baseline",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "periodOfflineBeforeAccessCheck": "PT12H",
+    "periodOnlineBeforeAccessCheck": "PT30M",
+    "allowedInboundDataTransferSources": "managedApps",
+    "allowedOutboundDataTransferDestinations": "managedApps",
+    "allowedOutboundClipboardSharingLevel": "managedAppsWithPasteIn",
+    "organizationalCredentialsRequired": false,
+    "dataBackupBlocked": true,
+    "deviceComplianceRequired": false,
+    "managedBrowserToOpenLinksRequired": true,
+    "saveAsBlocked": true,
+    "allowedDataStorageLocations": ["oneDriveForBusiness", "sharePoint"],
+    "periodOfflineBeforeWipeIsEnforced": "P90D",
+    "pinRequired": true,
+    "maximumPinRetries": 5,
+    "simplePinBlocked": true,
+    "minimumPinLength": 6,
+    "pinCharacterSet": "numeric",
+    "contactSyncBlocked": false,
+    "printBlocked": true,
+    "fingerprintBlocked": false,
+    "screenCaptureBlocked": true,
+    "disableAppEncryptionIfDeviceEncryptionIsEnabled": false,
+    "encryptAppData": true
+  }
+}

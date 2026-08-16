@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Nerdy-Potato/sf-intune-cac/schemas/groups.schema.json",
+  "title": "Assignment groups",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["groups"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "comment": { "type": ["string", "array"] },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "displayName", "mailNickname", "description", "purpose", "membership"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^sg-[a-z0-9-]+$" },
+          "displayName": { "type": "string", "minLength": 1 },
+          "mailNickname": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "description": { "type": "string", "minLength": 1 },
+          "purpose": { "type": "string", "enum": ["assignment", "exclusion"] },
+          "membership": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "values"],
+            "properties": {
+              "source": { "type": "string", "enum": ["tier", "accountType", "explicit"] },
+              "values": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

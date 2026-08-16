@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Nerdy-Potato/sf-intune-cac/schemas/tenant.schema.json",
+  "title": "Tenant settings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["displayName", "fallbackDomain", "environment", "managedMarker", "namePrefix", "safety"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "comment": { "type": ["string", "array"] },
+    "displayName": { "type": "string", "minLength": 1 },
+    "fallbackDomain": { "type": "string", "pattern": "^[a-z0-9-]+\\.onmicrosoft\\.com$" },
+    "primaryDomain": { "type": ["string", "null"] },
+    "environment": { "type": "string", "enum": ["production"] },
+    "managedMarker": { "type": "string", "minLength": 10 },
+    "namePrefix": { "type": "string", "minLength": 1 },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forbidAllUsersAssignment", "forbidAllDevicesAssignment", "requireExplicitDeleteApproval"],
+      "properties": {
+        "forbidAllUsersAssignment": { "type": "boolean" },
+        "forbidAllDevicesAssignment": { "type": "boolean" },
+        "requireExplicitDeleteApproval": { "type": "boolean" }
+      }
+    }
+  }
+}
