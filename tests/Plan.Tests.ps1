@@ -71,7 +71,9 @@ BeforeAll {
                     })
             }
 
-            foreach ($policy in $script:Config.Policies | Where-Object { $_.targetApps }) {
+            foreach ($policy in $script:Config.Policies | Where-Object {
+                    $null -ne $_.PSObject.Properties['targetApps']
+                }) {
                 $remotePolicy = $state.Policies[$policy.resource] |
                     Where-Object displayName -EQ $policy.payload.displayName |
                     Select-Object -First 1
