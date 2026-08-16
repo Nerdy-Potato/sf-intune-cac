@@ -42,6 +42,9 @@ gh variable set AZURE_APPLY_CLIENT_ID --body <apply-app-client-id>
 These are *variables*, not secrets. A client id is not a credential, and having them visible in the
 workflow logs makes debugging a failed run much easier.
 
+Until `AZURE_TENANT_ID` and `AZURE_PLAN_CLIENT_ID` are set, the Plan workflow skips the tenant plan
+and says so in the run summary. Configuration is still validated offline by CI.
+
 ## 3. Create the GitHub environments
 
 | Environment | Used by | Protection |
