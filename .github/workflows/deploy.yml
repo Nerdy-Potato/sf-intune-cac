@@ -1,0 +1,54 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'config/**'
+      - 'src/**'
+      - 'scripts/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      allow_delete:
+        description: 'Delete tenant objects that this repository owns but no longer defines'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+# Never let two deployments write to the tenant at the same time.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Apply to the tenant
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate configuration
+        shell: pwsh
+        run: ./scripts/Invoke-CaC.ps1 -Mode validate
+
+      - name: Apply
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          $allowDelete = '${{ inputs.allow_delete }}' -eq 'true'
+          ./scripts/Invoke-CaC.ps1 -Mode apply -AllowDelete:$allowDelete
+
+      - name: Upload applied plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: applied-plan
+          path: out/
+          if-no-files-found: ignore

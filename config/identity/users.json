@@ -1,0 +1,113 @@
+{
+  "$schema": "../../schemas/users.schema.json",
+  "comment": [
+    "Source of truth for account metadata and age-tier placement.",
+    "No dates of birth or other personal data are stored here - only the tier a person belongs to.",
+    "Accounts are NOT created by this repository; they already exist in the tenant.",
+    "This file drives static membership of the tier security groups in groups.json.",
+    "Where an age tier has not been confirmed by a tenant owner, the account is placed in the",
+    "MOST restrictive tier that still fits ('child') and ageTierConfirmed is set to false.",
+    "Loosening a tier is a deliberate, reviewable change - never a default."
+  ],
+  "users": [
+    {
+      "id": "john",
+      "displayName": "John",
+      "upnLocalPart": "john",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "adult",
+      "ageTierConfirmed": true
+    },
+    {
+      "id": "robin",
+      "displayName": "Robin",
+      "upnLocalPart": "robin",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "adult",
+      "ageTierConfirmed": true
+    },
+    {
+      "id": "samantha",
+      "displayName": "Samantha",
+      "upnLocalPart": "samantha",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "young-adult",
+      "ageTierConfirmed": true
+    },
+    {
+      "id": "adalynn",
+      "displayName": "Adalynn",
+      "upnLocalPart": "adalynn",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "child",
+      "ageTierConfirmed": false
+    },
+    {
+      "id": "lucas",
+      "displayName": "Lucas",
+      "upnLocalPart": "lucas",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "child",
+      "ageTierConfirmed": true
+    },
+    {
+      "id": "emmerick",
+      "displayName": "Emmerick",
+      "upnLocalPart": "emmerick",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "child",
+      "ageTierConfirmed": false
+    },
+    {
+      "id": "broderick",
+      "displayName": "Broderick",
+      "upnLocalPart": "broderick",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "child",
+      "ageTierConfirmed": false
+    },
+    {
+      "id": "cullen",
+      "displayName": "Cullen",
+      "upnLocalPart": "cullen",
+      "domain": "primary",
+      "accountType": "productivity",
+      "tier": "child",
+      "ageTierConfirmed": false
+    },
+    {
+      "id": "johnspaid",
+      "displayName": "John (Admin)",
+      "upnLocalPart": "johnspaid",
+      "domain": "fallback",
+      "accountType": "admin",
+      "tier": "admin",
+      "ageTierConfirmed": true
+    },
+    {
+      "id": "mauricemoss",
+      "displayName": "Break Glass 1",
+      "upnLocalPart": "mauricemoss",
+      "domain": "fallback",
+      "accountType": "firecall",
+      "tier": "excluded",
+      "ageTierConfirmed": true
+    },
+    {
+      "id": "robertjohnson",
+      "displayName": "Break Glass 2",
+      "upnLocalPart": "robertjohnson",
+      "domain": "fallback",
+      "accountType": "firecall",
+      "tier": "excluded",
+      "ageTierConfirmed": true
+    }
+  ]
+}

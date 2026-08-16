@@ -1,0 +1,72 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "App protection (MAM) for iOS. This is the control that matters most on a family tenant:",
+    "most devices are personally owned, so protecting the data inside Outlook/OneDrive is more",
+    "effective - and far less disruptive - than trying to fully manage the device.",
+    "Applies to every tier: this is data protection, not a parenting control."
+  ],
+  "name": "ios-app-protection-baseline",
+  "resource": "iosManagedAppProtections",
+  "assignments": [{ "group": "sg-productivity-all", "intent": "include" }],
+  "apps": [
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.office.outlook"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.skydrive"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.officemobile"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.msedge"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.skype.teams"
+      }
+    }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.iosManagedAppProtection",
+    "displayName": "CaC - iOS - App Protection Baseline",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "periodOfflineBeforeAccessCheck": "PT12H",
+    "periodOnlineBeforeAccessCheck": "PT30M",
+    "allowedInboundDataTransferSources": "managedApps",
+    "allowedOutboundDataTransferDestinations": "managedApps",
+    "allowedOutboundClipboardSharingLevel": "managedAppsWithPasteIn",
+    "organizationalCredentialsRequired": false,
+    "dataBackupBlocked": true,
+    "deviceComplianceRequired": false,
+    "managedBrowserToOpenLinksRequired": true,
+    "saveAsBlocked": true,
+    "allowedDataStorageLocations": ["oneDriveForBusiness", "sharePoint"],
+    "periodOfflineBeforeWipeIsEnforced": "P90D",
+    "pinRequired": true,
+    "maximumPinRetries": 5,
+    "simplePinBlocked": true,
+    "minimumPinLength": 6,
+    "pinCharacterSet": "numeric",
+    "contactSyncBlocked": false,
+    "printBlocked": true,
+    "fingerprintBlocked": false,
+    "faceIdBlocked": false,
+    "appDataEncryptionType": "whenDeviceLocked",
+    "filterOpenInToOnlyManagedApps": true
+  }
+}

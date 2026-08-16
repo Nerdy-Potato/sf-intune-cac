@@ -1,0 +1,67 @@
+{
+  "$schema": "../../schemas/groups.schema.json",
+  "comment": [
+    "Assignment groups. Membership is calculated from config/identity/users.json so that the",
+    "tier a person sits in is the only thing anyone has to edit when a child gets older.",
+    "Groups are assigned (static) rather than dynamic: dynamic rules would need attributes we",
+    "deliberately do not store (age / date of birth), and static membership is far easier to review."
+  ],
+  "groups": [
+    {
+      "id": "sg-tier-adult",
+      "displayName": "CaC-Tier-Adult",
+      "mailNickname": "cac-tier-adult",
+      "description": "Parents. Full privileges, security-only restrictions.",
+      "purpose": "assignment",
+      "membership": { "source": "tier", "values": ["adult"] }
+    },
+    {
+      "id": "sg-tier-young-adult",
+      "displayName": "CaC-Tier-YoungAdult",
+      "mailNickname": "cac-tier-youngadult",
+      "description": "18+ children. Security-only restrictions, no content or app controls.",
+      "purpose": "assignment",
+      "membership": { "source": "tier", "values": ["young-adult"] }
+    },
+    {
+      "id": "sg-tier-teen",
+      "displayName": "CaC-Tier-Teen",
+      "mailNickname": "cac-tier-teen",
+      "description": "14-17. Security baseline plus light content controls; apps are blocklisted, not allowlisted.",
+      "purpose": "assignment",
+      "membership": { "source": "tier", "values": ["teen"] }
+    },
+    {
+      "id": "sg-tier-child",
+      "displayName": "CaC-Tier-Child",
+      "mailNickname": "cac-tier-child",
+      "description": "13 and under. Strictest tier: approved apps only, forced web filtering, tight device controls.",
+      "purpose": "assignment",
+      "membership": { "source": "tier", "values": ["child"] }
+    },
+    {
+      "id": "sg-admins",
+      "displayName": "CaC-Admins",
+      "mailNickname": "cac-admins",
+      "description": "Dedicated administrative accounts. Hardened, no productivity workloads.",
+      "purpose": "assignment",
+      "membership": { "source": "accountType", "values": ["admin"] }
+    },
+    {
+      "id": "sg-productivity-all",
+      "displayName": "CaC-Productivity-All",
+      "mailNickname": "cac-productivity-all",
+      "description": "Every human productivity account. Target for tier-independent security baselines.",
+      "purpose": "assignment",
+      "membership": { "source": "accountType", "values": ["productivity"] }
+    },
+    {
+      "id": "sg-breakglass",
+      "displayName": "CaC-BreakGlass",
+      "mailNickname": "cac-breakglass",
+      "description": "Firecall accounts. Exclusion target only - never assign a policy to this group.",
+      "purpose": "exclusion",
+      "membership": { "source": "accountType", "values": ["firecall"] }
+    }
+  ]
+}

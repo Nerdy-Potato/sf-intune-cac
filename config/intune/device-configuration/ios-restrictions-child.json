@@ -1,0 +1,40 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Strictest iOS tier (13 and under): the App Store is blocked outright, so apps arrive only via",
+    "explicitly approved Intune app assignments, and media ratings are pinned to age-appropriate levels."
+  ],
+  "name": "ios-restrictions-child",
+  "resource": "deviceConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.iosGeneralDeviceConfiguration",
+    "displayName": "CaC - iOS - Device Restrictions (Child)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "appStoreBlocked": true,
+    "appStoreBlockInAppPurchases": true,
+    "appStoreBlockAutomaticDownloads": true,
+    "appStoreRequirePassword": true,
+    "appsSingleAppModeList": [],
+    "safariBlockPopups": true,
+    "safariRequireFraudWarning": true,
+    "safariBlockAutofill": true,
+    "safariCookieSettings": "blockThirdPartyCookies",
+    "iTunesBlockExplicitContent": true,
+    "ratingApps": "unitedStatesAppsAgesAbove12",
+    "ratingMovies": "unitedStatesMoviesPg",
+    "ratingTvShows": "unitedStatesTelevisionTvPG",
+    "gameCenterBlocked": true,
+    "gamingBlockMultiplayer": true,
+    "gamingBlockGameCenterFriends": true,
+    "siriBlockedWhenLocked": true,
+    "cameraBlocked": false,
+    "airDropBlocked": true,
+    "deviceBlockEraseContentAndSettings": true,
+    "configurationProfileBlockChanges": true,
+    "passcodeBlockSimple": true,
+    "passcodeRequired": true,
+    "passcodeMinimumLength": 6,
+    "passcodeRequiredType": "numeric"
+  }
+}

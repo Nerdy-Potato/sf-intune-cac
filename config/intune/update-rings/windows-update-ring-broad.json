@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Broad ring: everyone who is not in the pilot ring, deferred 7 days behind it.",
+    "The adult tier is explicitly excluded - two update rings on one device is a real outage class,",
+    "so the include/exclude pair here is load-bearing, not decoration."
+  ],
+  "name": "windows-update-ring-broad",
+  "resource": "deviceConfigurations",
+  "assignments": [
+    { "group": "sg-productivity-all", "intent": "include" },
+    { "group": "sg-tier-adult", "intent": "exclude" }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.windowsUpdateForBusinessConfiguration",
+    "displayName": "CaC - Windows - Update Ring 2 (Broad)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "microsoftUpdateServiceAllowed": true,
+    "driversExcluded": false,
+    "qualityUpdatesDeferralPeriodInDays": 7,
+    "featureUpdatesDeferralPeriodInDays": 14,
+    "businessReadyUpdatesOnly": "businessReadyOnly",
+    "automaticUpdateMode": "autoInstallAtMaintenanceTime",
+    "deliveryOptimizationMode": "httpWithPeeringNat",
+    "prereleaseFeatures": "notAllowed",
+    "deadlineForQualityUpdatesInDays": 5,
+    "deadlineForFeatureUpdatesInDays": 7,
+    "deadlineGracePeriodInDays": 2,
+    "postponeRebootUntilAfterDeadline": false,
+    "allowWindows11Upgrade": true
+  }
+}

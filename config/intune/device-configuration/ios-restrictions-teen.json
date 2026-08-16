@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": "14-17. App Store is open, ratings are raised, and the safety-net settings (fraud warning, explicit content) stay on.",
+  "name": "ios-restrictions-teen",
+  "resource": "deviceConfigurations",
+  "assignments": [{ "group": "sg-tier-teen", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.iosGeneralDeviceConfiguration",
+    "displayName": "CaC - iOS - Device Restrictions (Teen)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "appStoreBlocked": false,
+    "appStoreBlockInAppPurchases": true,
+    "appStoreRequirePassword": true,
+    "safariBlockPopups": true,
+    "safariRequireFraudWarning": true,
+    "iTunesBlockExplicitContent": true,
+    "ratingApps": "unitedStatesAppsAgesAbove17",
+    "ratingMovies": "unitedStatesMoviesPG13",
+    "ratingTvShows": "unitedStatesTelevisionTv14",
+    "deviceBlockEraseContentAndSettings": true,
+    "configurationProfileBlockChanges": true,
+    "passcodeBlockSimple": true,
+    "passcodeRequired": true,
+    "passcodeMinimumLength": 6,
+    "passcodeRequiredType": "numeric"
+  }
+}

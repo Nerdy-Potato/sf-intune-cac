@@ -1,0 +1,96 @@
+name: Plan
+
+on:
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'src/**'
+      - 'scripts/**'
+      - '.github/workflows/plan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: plan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan against the tenant
+    runs-on: ubuntu-latest
+    # Forks get no OIDC token, so there is nothing to authenticate with. CI still validates the
+    # configuration offline; a maintainer runs the plan from a branch in this repository.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch'
+    environment: plan
+    steps:
+      - uses: actions/checkout@v4
+
+      # Until bootstrap/New-CaCGitHubIdentity.ps1 has been run, the federated identity variables do
+      # not exist, and there is no tenant to plan against. CI still validates the configuration
+      # offline, so skip the plan instead of failing the pull request.
+      - name: Check tenant identity is configured
+        id: identity
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: |
+          if ($env:AZURE_TENANT_ID -and $env:AZURE_CLIENT_ID) {
+              'configured=true' | Add-Content -Path $env:GITHUB_OUTPUT
+          }
+          else {
+              'configured=false' | Add-Content -Path $env:GITHUB_OUTPUT
+              Write-Host '::notice::Skipping the tenant plan because the AZURE_TENANT_ID and AZURE_PLAN_CLIENT_ID repository variables are not set. See docs/bootstrap.md.'
+          }
+
+      - name: Produce plan (read-only)
+        if: steps.identity.outputs.configured == 'true'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: ./scripts/Invoke-CaC.ps1 -Mode plan
+
+      - name: Upload plan
+        if: steps.identity.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: out/
+
+      - name: Comment plan on the pull request
+        if: steps.identity.outputs.configured == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- intune-cac-plan -->';
+            const body = `${marker}\n${fs.readFileSync('out/plan.md', 'utf8')}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

@@ -1,0 +1,17 @@
+# Deployment output
+out/
+plan/
+*.plan.json
+*.plan.md
+
+# PowerShell / editor noise
+*.log
+.vscode/
+.idea/
+
+# Never commit credentials
+*.pfx
+*.pem
+*.key
+.env
+secrets.json

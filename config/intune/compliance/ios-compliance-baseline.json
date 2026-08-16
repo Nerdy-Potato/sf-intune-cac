@@ -1,0 +1,41 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": "Security-only compliance floor for iOS/iPadOS. Applies to every tier - this is not a parenting control.",
+  "name": "ios-compliance-baseline",
+  "resource": "deviceCompliancePolicies",
+  "assignments": [{ "group": "sg-productivity-all", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.iosCompliancePolicy",
+    "displayName": "CaC - iOS - Compliance Baseline",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "passcodeRequired": true,
+    "passcodeBlockSimple": true,
+    "passcodeMinimumLength": 6,
+    "passcodeRequiredType": "numeric",
+    "passcodeMinutesOfInactivityBeforeLock": 5,
+    "passcodeMinutesOfInactivityBeforeScreenTimeout": 5,
+    "securityBlockJailbrokenDevices": true,
+    "deviceThreatProtectionEnabled": false,
+    "managedEmailProfileRequired": false,
+    "osMinimumVersion": "17.0",
+    "scheduledActionsForRule": [
+      {
+        "ruleName": "PasswordRequired",
+        "scheduledActionConfigurations": [
+          {
+            "actionType": "notification",
+            "gracePeriodHours": 0,
+            "notificationTemplateId": "",
+            "notificationMessageCCList": []
+          },
+          {
+            "actionType": "block",
+            "gracePeriodHours": 72,
+            "notificationTemplateId": "",
+            "notificationMessageCCList": []
+          }
+        ]
+      }
+    ]
+  }
+}
