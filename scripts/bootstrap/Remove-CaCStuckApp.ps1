@@ -73,7 +73,7 @@ foreach ($rawAppId in $AppId) {
     }
 
     $normalizedAppId = $normalizedAppId.Trim()
-    $app = & $graphInvoker -Method 'GET' -Uri "deviceAppManagement/mobileApps/$normalizedAppId?`$select=id,displayName,publishingState"
+    $app = & $graphInvoker -Method 'GET' -Uri "deviceAppManagement/mobileApps/${normalizedAppId}?`$select=id,displayName,publishingState"
 
     $displayName = if ([string]::IsNullOrWhiteSpace([string] $app.displayName)) {
         $normalizedAppId
@@ -92,7 +92,7 @@ foreach ($rawAppId in $AppId) {
     }
 
     if ($PSCmdlet.ShouldProcess("$displayName [$normalizedAppId]", 'Delete Intune mobile app object')) {
-        & $graphInvoker -Method 'DELETE' -Uri "deviceAppManagement/mobileApps/$normalizedAppId" | Out-Null
+        & $graphInvoker -Method 'DELETE' -Uri "deviceAppManagement/mobileApps/${normalizedAppId}" | Out-Null
         Write-Host "Deleted $displayName [$normalizedAppId]."
     }
 }

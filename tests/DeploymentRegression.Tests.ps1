@@ -202,8 +202,52 @@ Describe 'Bootstrap and managed-object safety' {
         $script:StuckAppBootstrap | Should -Match 'NewBoundScriptBlock'
         $script:StuckAppBootstrap | Should -Match 'Invoke-CaCGraphRequest\s+-Method\s+\$Method\s+-Uri\s+\$Uri\s+-Body\s+\$Body'
         $script:StuckAppBootstrap | Should -Match 'publishingState'
-        $script:StuckAppBootstrap | Should -Match 'deviceAppManagement/mobileApps/\$normalizedAppId'
+        $script:StuckAppBootstrap | Should -Match 'deviceAppManagement/mobileApps/\$\{normalizedAppId\}'
         $script:StuckAppBootstrap | Should -Match 'ShouldProcess'
         $script:StuckAppBootstrap | Should -Match 'DELETE'
+    }
+
+    It 'builds fully resolved GET and DELETE URIs for stuck app remediation' {
+        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/Remove-CaCStuckApp.ps1'
+        $capturedCalls = [System.Collections.Generic.List[object]]::new()
+
+        Mock -CommandName Import-Module {}
+        Mock -CommandName Connect-CaCGraph {}
+        Mock -CommandName Get-Module {
+            $fakeModule = [pscustomobject]@{}
+            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
+                param([scriptblock] $ScriptBlock)
+                $ScriptBlock
+            } -Force -PassThru
+        }
+        function Invoke-CaCGraphRequest {
+            param(
+                [string] $Method,
+                [string] $Uri,
+                $Body
+            )
+
+            $capturedCalls.Add([pscustomobject]@{
+                    Method = $Method
+                    Uri    = $Uri
+                    Body   = $Body
+                }) | Out-Null
+
+            if ($Method -eq 'GET') {
+                return [pscustomobject]@{
+                    id              = 'abc123'
+                    displayName     = 'Contoso App'
+                    publishingState = 'processing'
+                }
+            }
+        }
+
+        & $scriptPath -AppId 'abc123' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false
+
+        $capturedCalls | Should -HaveCount 2
+        $capturedCalls[0].Method | Should -Be 'GET'
+        $capturedCalls[0].Uri | Should -Be 'deviceAppManagement/mobileApps/abc123?$select=id,displayName,publishingState'
+        $capturedCalls[1].Method | Should -Be 'DELETE'
+        $capturedCalls[1].Uri | Should -Be 'deviceAppManagement/mobileApps/abc123'
     }
 }
