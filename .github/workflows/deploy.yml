@@ -50,6 +50,14 @@ jobs:
       pull-requests: read
       actions: read
     steps:
+      # Full history is required so the recovery-mode lineage check below can run
+      # `git merge-base --is-ancestor` locally instead of calling the GitHub REST
+      # "compare two commits" endpoint, which has proven unreliable (404s, including
+      # for trivial base==head self-compares) for this repository.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Require a reviewed pull request and successful plan
         id: review
         uses: actions/github-script@v7
@@ -87,13 +95,17 @@ jobs:
             }
 
             if (recovery) {
-              const lineage = await github.rest.repos.compareCommits({
-                owner,
-                repo,
-                base: pullRequest.merge_commit_sha,
-                head: sha
-              });
-              if (!['ahead', 'identical'].includes(lineage.data.status)) {
+              // Verify locally (via the full-history checkout above) that the reviewed
+              // merge commit is an ancestor of (or equal to) the current main tip. This
+              // replaces a REST "compare two commits" call that proved unreliable for
+              // this repository (404s even on trivial base==head self-compares).
+              let isAncestor = true;
+              try {
+                await exec.exec('git', ['merge-base', '--is-ancestor', pullRequest.merge_commit_sha, sha]);
+              } catch (error) {
+                isAncestor = false;
+              }
+              if (!isAncestor) {
                 core.setFailed(
                   `Current main commit ${sha} does not contain reviewed merge commit ${pullRequest.merge_commit_sha}.`
                 );
