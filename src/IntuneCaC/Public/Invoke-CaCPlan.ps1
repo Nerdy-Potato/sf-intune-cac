@@ -325,8 +325,12 @@ function Invoke-CaCPlan {
                 '{0} {1}' -f $existingDescription.Trim(), 'Managed by sf-intune-cac.'
             }
 
+            # Graph's PATCH on the polymorphic mobileApps collection requires the concrete
+            # @odata.type in the request body to model-bind correctly; omitting it causes a
+            # generic 400 ModelValidationFailure even for an otherwise-valid partial payload.
             & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($adoptAppAction.ObjectId)" @{
-                description = $description
+                '@odata.type' = $app.payload.'@odata.type'
+                description   = $description
             } | Out-Null
             $adoptAppAction.ObjectId
         }

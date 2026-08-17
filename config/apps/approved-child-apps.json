@@ -11,7 +11,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft Defender",
         "description": "Required MDE and Global Secure Access client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -26,7 +26,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft 365 Copilot",
         "description": "Approved Microsoft 365 productivity and Copilot client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -41,7 +41,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft Word",
         "description": "Approved Microsoft Word client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -56,7 +56,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft Excel",
         "description": "Approved Microsoft Excel client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -71,7 +71,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft PowerPoint",
         "description": "Approved Microsoft PowerPoint client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -86,7 +86,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft OneNote",
         "description": "Approved Microsoft OneNote client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -101,7 +101,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft Outlook",
         "description": "Approved Microsoft Outlook client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -116,7 +116,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft Teams",
         "description": "Approved Microsoft Teams client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -131,7 +131,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft OneDrive",
         "description": "Approved Microsoft OneDrive client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
@@ -146,7 +146,7 @@
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
         "displayName": "Microsoft Edge",
         "description": "Approved Microsoft Edge client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
