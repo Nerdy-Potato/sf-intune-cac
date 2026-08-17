@@ -25,6 +25,7 @@ function Invoke-CaCGraphRequest {
         [string] $ApiVersion = 'beta',
 
         [Parameter()]
+        [ValidateRange(1, 10)]
         [int] $MaxAttempts = 5
     )
 
@@ -71,9 +72,11 @@ function Invoke-CaCGraphRequest {
                 $status = [int] $_.Exception.Response.StatusCode
             }
 
-            $transientReferenceNotFound = $status -eq 404 -and $Method -ne 'GET' -and
+            $retryableMethod = $Method -in @('GET', 'PATCH', 'PUT', 'DELETE')
+            $transientReferenceNotFound = $status -eq 404 -and $retryableMethod -and
                 $Uri -match '/(assign|members/|targetApps)'
-            if (($status -notin @(429, 500, 502, 503, 504) -and -not $transientReferenceNotFound) -or
+            if (-not $retryableMethod -or
+                (($status -notin @(429, 500, 502, 503, 504) -and -not $transientReferenceNotFound)) -or
                 $attempt -eq $MaxAttempts) { throw }
 
             $delay = [int] [Math]::Pow(2, $attempt)

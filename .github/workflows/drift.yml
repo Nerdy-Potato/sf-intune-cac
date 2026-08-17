@@ -29,8 +29,11 @@ jobs:
         shell: pwsh
         run: |
           Set-StrictMode -Version Latest
-          $plan = Get-Content -Path ./out/plan.json -Raw | ConvertFrom-Json
-          $changes = @($plan | Where-Object { $_.Action -notin @('NoChange', 'Skip') })
+          $document = Get-Content -Path ./out/plan.json -Raw | ConvertFrom-Json
+          if ($document.Status -ne 'Ready') {
+            throw "Tenant plan is not ready (status: $($document.Status))."
+          }
+          $changes = @($document.Actions | Where-Object { $_.Action -ne 'NoChange' })
 
           if ($changes) {
             $changes | ForEach-Object { Write-Host "::warning::$($_.Action) $($_.Kind) $($_.Target)" }

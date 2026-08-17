@@ -64,21 +64,23 @@ function Find-CaCRemoteApp {
         [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $RemoteApps
     )
 
-    switch ($App.source) {
+    $matchesIdentity = switch ($App.source) {
         'managedGooglePlay' {
-            return $RemoteApps | Where-Object {
+            $RemoteApps | Where-Object {
                 (Get-CaCProperty -InputObject $_ -Name 'packageId') -eq $App.payload.packageId
-            } | Select-Object -First 1
+            }
         }
         'iosStore' {
-            return $RemoteApps | Where-Object {
+            $RemoteApps | Where-Object {
                 (Get-CaCProperty -InputObject $_ -Name 'bundleId') -eq $App.payload.bundleId
-            } | Select-Object -First 1
+            }
         }
         'existing' {
-            return $RemoteApps | Where-Object {
+            $RemoteApps | Where-Object {
                 (Get-CaCProperty -InputObject $_ -Name 'displayName') -eq $App.payload.displayName
-            } | Select-Object -First 1
+            }
         }
     }
+
+    return $matchesIdentity | Select-Object -First 1
 }

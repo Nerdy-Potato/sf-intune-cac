@@ -70,7 +70,9 @@ Require these checks before merge:
 - `Plan / Plan against the tenant`
 
 and require a pull request review. Direct pushes to `main` should be blocked - a push to `main` is
-a deployment.
+a deployment, and Deploy rejects any commit that is not associated with a reviewed pull request.
+Manual Deploy runs must select a commit on `main`; the workflow's reviewed-commit check rejects
+branches and tags.
 
 ## 5. Confirm the tenant details
 

@@ -27,7 +27,11 @@ BeforeAll {
             foreach ($group in $script:Config.Groups) {
                 $index++
                 $objectId = "group-$index"
-                $state.Groups += [pscustomobject]@{ id = $objectId; displayName = $group.displayName; description = $group.description }
+                $state.Groups += [pscustomobject]@{
+                    id          = $objectId
+                    displayName = $group.displayName
+                    description = '{0} {1}' -f $group.description, $script:Config.Tenant.managedMarker
+                }
                 $state.Members[$objectId] = @($group.members | ForEach-Object { [pscustomobject]@{ id = "user-$_"; userPrincipalName = $_ } })
             }
 
@@ -254,8 +258,67 @@ Describe 'New-CaCPlan' {
             @($script:OrphanPlan | Where-Object Target -EQ 'Some policy someone made in the portal') | Should -BeNullOrEmpty
         }
 
+        It 'does not propose deleting a same-namespace object without the managed marker' {
+            $state = New-FakeTenant -InSync -ExtraPolicies @(
+                @{
+                    Resource = 'deviceCompliancePolicies'
+                    Object   = [pscustomobject]@{
+                        id          = 'unmanaged-same-namespace'
+                        displayName = 'CaC - Windows - Unmanaged Policy'
+                        description = 'created by hand'
+                    }
+                }
+            )
+
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+            @($plan | Where-Object Target -EQ 'CaC - Windows - Unmanaged Policy') | Should -BeNullOrEmpty
+        }
+
         It 'warns about deletions in the rendered plan' {
             $script:OrphanPlan | Format-CaCPlan | Should -BeLike '*This plan contains deletions*'
+        }
+    }
+
+    Context 'when an existing app configuration targets an app that must be created' {
+        It 'keeps the policy in the same plan so apply can bind the new app id' {
+            $state = New-FakeTenant -InSync
+            $defender = $script:Config.Apps | Where-Object id -EQ 'android-defender'
+            $remoteDefender = $state.Apps | Where-Object packageId -EQ $defender.payload.packageId |
+                Select-Object -First 1
+            $state.Apps = @($state.Apps | Where-Object id -NE $remoteDefender.id)
+
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+            @($plan | Where-Object {
+                    $_.Kind -eq 'App' -and $_.Action -eq 'Create' -and $_.Target -eq $defender.payload.displayName
+                }).Count | Should -Be 1
+            @($plan | Where-Object {
+                    $_.Kind -eq 'Policy' -and $_.Action -eq 'Update' -and
+                    $_.Target -eq 'CaC - Android - Defender and GSA (Child)'
+                }).Count | Should -Be 1
+        }
+    }
+
+    Context 'when an unmanaged app has the same store identity as an approved app' {
+        It 'does not propose mutating the unmanaged app' {
+            $state = New-FakeTenant -InSync
+            $defender = $script:Config.Apps | Where-Object id -EQ 'android-defender'
+            $managed = $state.Apps | Where-Object packageId -EQ $defender.payload.packageId |
+                Select-Object -First 1
+            $state.Apps = @($state.Apps | Where-Object id -NE $managed.id)
+            $state.Apps += [pscustomobject]@{
+                id          = 'unmanaged-defender'
+                packageId   = $defender.payload.packageId
+                displayName = 'Portal Defender'
+                description = 'created by hand'
+            }
+
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+            $appActions = @($plan | Where-Object Target -EQ $defender.payload.displayName)
+
+            @($appActions | Where-Object { $_.Kind -eq 'App' -and $_.Action -in @('Create', 'Update') }) |
+                Should -BeNullOrEmpty
         }
     }
 
@@ -348,6 +411,21 @@ Describe 'Invoke-CaCPlan' {
         @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
     }
 
+    It 'applies a JSON-round-tripped reviewed plan without rediscovering ids' {
+        $planState = New-FakeTenant -InSync
+        $childGroup = @($planState.Groups | Where-Object displayName -EQ 'CaC-Tier-Child')[0]
+        $planState.Members[$childGroup.id] = @($planState.Members[$childGroup.id] | Select-Object -Skip 1)
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $planState)
+        $roundTripped = $plan | ConvertTo-Json -Depth 50 | ConvertFrom-Json
+
+        $applyState = New-FakeTenant -InSync
+        $results = Invoke-CaCPlan -Plan $roundTripped -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $applyState) -Confirm:$false
+
+        @($results | Where-Object Status -in @('Failed', 'Skipped')) | Should -BeNullOrEmpty
+        @($applyState.Calls | Where-Object Method -NE 'GET') | Should -Not -BeNullOrEmpty
+    }
+
     It 'preserves app assignments outside the child app catalog scope' {
         $state = New-FakeTenant -InSync
         $app = $state.Apps | Where-Object packageId -EQ 'com.microsoft.scmx' | Select-Object -First 1
@@ -379,6 +457,185 @@ Describe 'Invoke-CaCPlan' {
 
         @($applyState.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
     }
+
+    It 'does not take over an unmanaged group with the desired display name' {
+        $state = New-FakeTenant
+        $group = $script:Config.Groups[0]
+        $state.Groups += [pscustomobject]@{
+            id          = 'unmanaged-group'
+            displayName = $group.displayName
+            description = 'created outside config'
+        }
+
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+        $match = @($plan | Where-Object { $_.Target -eq $group.displayName })
+
+        $match.Action | Should -Be 'Skip'
+        $match.Details -join ' ' | Should -BeLike '*unmanaged group*'
+        @($match | Where-Object { $_.Kind -eq 'Group' -and $_.Action -eq 'Create' }) | Should -BeNullOrEmpty
+    }
+
+    It 'does not take over an unmanaged app or policy with the desired identity' {
+        $state = New-FakeTenant -InSync
+        $app = $state.Apps | Where-Object packageId -EQ 'com.microsoft.scmx' | Select-Object -First 1
+        $app.description = 'managed by another system'
+        $policy = $state.Policies['deviceCompliancePolicies'] |
+            Where-Object displayName -EQ 'CaC - Windows - Compliance Baseline'
+        $policy.description = 'created outside config'
+
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+        @($plan | Where-Object Target -EQ 'Microsoft Defender' | Where-Object Action -EQ 'Skip') |
+            Should -Not -BeNullOrEmpty
+        @($plan | Where-Object { $_.Target -eq 'Microsoft Defender' -and $_.Action -in @('Create', 'Update') }) |
+            Should -BeNullOrEmpty
+        ($plan | Where-Object Target -EQ 'CaC - Windows - Compliance Baseline').Action | Should -Be 'Skip'
+        @($plan | Where-Object { $_.Action -in @('Create', 'Update') -and
+                $_.Target -in @('Microsoft Defender', 'CaC - Windows - Compliance Baseline') }) |
+            Should -BeNullOrEmpty
+    }
+
+    It 'fails a dependent policy assignment when its group was skipped' {
+        $group = $script:Config.Groups | Where-Object id -EQ 'sg-tier-adult'
+        $policy = $script:Config.Policies | Select-Object -First 1
+        $plan = @(
+            [pscustomobject]@{
+                Kind    = 'Group'
+                Action  = 'Skip'
+                Target  = $group.displayName
+                Details = @('unmanaged group')
+                Data    = $group
+            }
+            [pscustomobject]@{
+                Kind    = 'Assignment'
+                Action  = 'Update'
+                Target  = $policy.payload.displayName
+                Details = @('include sg-tier-adult')
+                Data    = [pscustomobject]@{ Policy = $policy; Id = 'policy-unmanaged' }
+            }
+        )
+        $state = New-FakeTenant
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Assign policy').Status | Should -Be 'Failed'
+        @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'fails a dependent policy write when its target app was skipped' {
+        $app = $script:Config.Apps | Where-Object id -EQ 'android-defender'
+        $policy = $script:Config.Policies | Where-Object {
+            $_.ContainsKey('targetApps') -and $_.targetApps -contains 'android-defender'
+        }
+        $plan = @(
+            [pscustomobject]@{
+                Kind    = 'App'
+                Action  = 'Skip'
+                Target  = $app.payload.displayName
+                Details = @('unmanaged app')
+                Data    = $app
+            }
+            [pscustomobject]@{
+                Kind    = 'Policy'
+                Action  = 'Update'
+                Target  = $policy.payload.displayName
+                Details = @('targeted app drift')
+                Data    = [pscustomobject]@{ Policy = $policy; Id = 'policy-1' }
+            }
+        )
+        $state = New-FakeTenant
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Update policy').Status | Should -Be 'Failed'
+        @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'fails a dependent assignment when its policy was skipped' {
+        $policy = $script:Config.Policies | Select-Object -First 1
+        $plan = @(
+            [pscustomobject]@{
+                Kind    = 'Policy'
+                Action  = 'Skip'
+                Target  = $policy.payload.displayName
+                Details = @('unmanaged policy')
+            }
+            [pscustomobject]@{
+                Kind    = 'Assignment'
+                Action  = 'Update'
+                Target  = $policy.payload.displayName
+                Details = @('include sg-tier-adult')
+                Data    = [pscustomobject]@{ Policy = $policy; Id = 'policy-unmanaged' }
+            }
+        )
+        $state = New-FakeTenant
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Assign policy').Status | Should -Be 'Failed'
+        @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'fails a dependent app assignment when its app was skipped even if an id is present' {
+        $app = $script:Config.Apps | Where-Object id -EQ 'android-defender'
+        $plan = @(
+            [pscustomobject]@{
+                Kind    = 'App'
+                Action  = 'Skip'
+                Target  = $app.payload.displayName
+                Details = @('unmanaged app')
+                Data    = $app
+            }
+            [pscustomobject]@{
+                Kind    = 'AppAssignment'
+                Action  = 'Update'
+                Target  = $app.payload.displayName
+                Details = @('required sg-tier-child')
+                Data    = [pscustomobject]@{ App = $app; Id = 'app-unmanaged' }
+            }
+        )
+        $state = New-FakeTenant
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Assign app').Status | Should -Be 'Failed'
+        @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'returns a failed result when a write action fails' {
+        $plan = @([pscustomobject]@{
+                Kind    = 'Group'
+                Action  = 'Create'
+                Target  = 'CaC-Tier-Adult'
+                Details = @()
+                Data    = $script:Config.Groups[0]
+            })
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -ne 'GET') { throw 'simulated Graph write failure' }
+            [pscustomobject]@{ value = @() }
+        }
+
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Create group').Status | Should -Be 'Failed'
+        ($results | Where-Object Action -EQ 'Create group').Message | Should -BeLike '*simulated Graph write failure*'
+    }
+
+    It 'returns skipped results for plan actions that cannot be applied' {
+        $plan = @([pscustomobject]@{
+                Kind    = 'App'
+                Action  = 'Prerequisite'
+                Target  = 'Global Secure Access Client'
+                Details = @('package must be added first')
+                Data    = $script:Config.Apps | Where-Object id -EQ 'windows-gsa-client'
+            })
+
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+            -GraphInvoker { param($Method, $Uri, $Body) [pscustomobject]@{ value = @() } } -Confirm:$false
+
+        ($results | Where-Object Target -EQ 'Global Secure Access Client').Status | Should -Be 'Skipped'
+    }
 }
 
 Describe 'Graph client safety' {
@@ -386,6 +643,21 @@ Describe 'Graph client safety' {
         InModuleScope IntuneCaC {
             Connect-CaCGraph -TenantId '00000000-0000-0000-0000-000000000000' -AccessToken 'not-a-real-token' -ReadOnly
             { Invoke-CaCGraphRequest -Method POST -Uri 'groups' -Body @{} } | Should -Throw '*read-only*'
+        }
+    }
+
+    It 'never retries a POST after a possible create timeout' {
+        InModuleScope IntuneCaC {
+            Connect-CaCGraph -TenantId '00000000-0000-0000-0000-000000000000' `
+                -AccessToken 'not-a-real-token'
+            $script:requestCount = 0
+            Mock Invoke-RestMethod {
+                $script:requestCount++
+                throw 'simulated timeout after the server accepted the request'
+            }
+
+            { Invoke-CaCGraphRequest -Method POST -Uri 'groups' -Body @{} -MaxAttempts 3 } | Should -Throw
+            $script:requestCount | Should -Be 1
         }
     }
 }

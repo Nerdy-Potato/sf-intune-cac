@@ -1,40 +1,30 @@
 # Work Routing
 
-How to decide who handles what.
-
 ## Routing Table
 
 | Work Type | Route To | Examples |
-|-----------|----------|----------|
-| {domain 1} | {Name} | {example tasks} |
-| {domain 2} | {Name} | {example tasks} |
-| {domain 3} | {Name} | {example tasks} |
-| Code review | {Name} | Review PRs, check quality, suggest improvements |
-| Testing | {Name} | Write tests, find edge cases, verify fixes |
-| Scope & priorities | {Name} | What to build next, trade-offs, decisions |
-| Session logging | Scribe | Automatic — never needs routing |
-| RAI review | Rai | Content safety, bias checks, credential detection, ethical review |
+|-----------|----------|---------|
+| Scope, architecture, review | Morpheus | Deployment design, resource lifecycle, cross-cutting decisions |
+| Graph and PowerShell engine | Trinity | Microsoft Graph requests, payloads, plan/apply behavior |
+| GitHub Actions and deployment | Tank | Workflow permissions, environments, secrets, deployment gates |
+| Testing and validation | Switch | Pester coverage, schema validation, regression checks |
+| Security and tenant policy | Mouse | Safety rules, identity boundaries, delete protection |
+| Session logging | Scribe | Decisions and session records |
+| Work monitoring | Ralph | Backlog and follow-through |
+| RAI review | Rai | Content safety and privacy |
+| Claim verification | Fact Checker | Verify APIs, action behavior, and dependencies |
 
 ## Issue Routing
 
 | Label | Action | Who |
 |-------|--------|-----|
-| `squad` | Triage: analyze issue, assign `squad:{member}` label | Lead |
+| `squad` | Triage: analyze issue, assign `squad:{member}` label | Morpheus |
 | `squad:{name}` | Pick up issue and complete the work | Named member |
-
-### How Issue Assignment Works
-
-1. When a GitHub issue gets the `squad` label, the **Lead** triages it — analyzing content, assigning the right `squad:{member}` label, and commenting with triage notes.
-2. When a `squad:{member}` label is applied, that member picks up the issue in their next session.
-3. Members can reassign by removing their label and adding another member's label.
-4. The `squad` label is the "inbox" — untriaged issues waiting for Lead review.
 
 ## Rules
 
-1. **Eager by default** — spawn all agents who could usefully start work, including anticipatory downstream work.
-2. **Scribe always runs** after substantial work, always as `mode: "background"`. Never blocks.
-3. **Quick facts → coordinator answers directly.** Don't spawn an agent for "what port does the server run on?"
-4. **When two agents could handle it**, pick the one whose domain is the primary concern.
-5. **"Team, ..." → fan-out.** Spawn all relevant agents in parallel as `mode: "background"`.
-6. **Anticipate downstream work.** If a feature is being built, spawn the tester to write test cases from requirements simultaneously.
-7. **Issue-labeled work** — when a `squad:{member}` label is applied to an issue, route to that member. The Lead handles all `squad` (base label) triage.
+1. Morpheus owns cross-cutting deployment decisions.
+2. Trinity and Tank coordinate engine behavior with workflow wiring.
+3. Mouse reviews every change that can write to the production tenant.
+4. Switch may reject fixes without regression coverage.
+5. Scribe records decisions; agents use the decisions inbox rather than editing decisions.md directly.
