@@ -40,6 +40,14 @@
       "membership": { "source": "tier", "values": ["child"] }
     },
     {
+      "id": "sg-youngest-children",
+      "displayName": "CaC-Youngest-Children",
+      "mailNickname": "cac-youngest-children",
+      "description": "Explicit managed-device target for Emmerick, Broderick, and Cullen.",
+      "purpose": "assignment",
+      "membership": { "source": "explicit", "values": ["emmerick", "broderick", "cullen"] }
+    },
+    {
       "id": "sg-admins",
       "displayName": "CaC-Admins",
       "mailNickname": "cac-admins",

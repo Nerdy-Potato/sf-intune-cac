@@ -1,6 +1,6 @@
 # Enterprise child enrollment
 
-Emmerick, Broderick, and Cullen are members of `CaC-Tier-Child`. That group receives the corporate
+Emmerick, Broderick, and Cullen are members of the explicit `CaC-Youngest-Children` security group. That group receives the corporate
 enrollment restriction, platform security profiles, approved app catalog, MDE, and GSA policies.
 
 ## Enrollment posture
@@ -51,7 +51,7 @@ identifier, silently onboards, connects for all domains, disables split tunnelin
 override.
 
 On Windows, the GSA Win32 package is required. The tenant must also have the Internet Access traffic
-forwarding profile enabled and assigned to `CaC-Tier-Child`; traffic forwarding profiles are Entra
+forwarding profile enabled and assigned to `CaC-Youngest-Children`; traffic forwarding profiles are Entra
 Global Secure Access objects rather than Intune objects.
 
 ## Scheduled device lock

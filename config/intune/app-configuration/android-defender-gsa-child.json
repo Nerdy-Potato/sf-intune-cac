@@ -7,7 +7,7 @@
   "name": "android-defender-gsa-child",
   "resource": "mobileAppConfigurations",
   "targetApps": ["android-defender"],
-  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "assignments": [{ "group": "sg-youngest-children", "intent": "include" }],
   "payload": {
     "@odata.type": "#microsoft.graph.androidManagedStoreAppConfiguration",
     "displayName": "CaC - Android - Defender and GSA (Child)",

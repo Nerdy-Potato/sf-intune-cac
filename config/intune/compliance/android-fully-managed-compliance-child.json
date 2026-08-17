@@ -3,7 +3,7 @@
   "comment": "Corporate-owned Android devices must be healthy, encrypted, current, and protected by MDE.",
   "name": "android-fully-managed-compliance-child",
   "resource": "deviceCompliancePolicies",
-  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "assignments": [{ "group": "sg-youngest-children", "intent": "include" }],
   "payload": {
     "@odata.type": "#microsoft.graph.androidDeviceOwnerCompliancePolicy",
     "displayName": "CaC - Android - Fully Managed Compliance (Child)",

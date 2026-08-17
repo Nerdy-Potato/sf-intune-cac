@@ -90,7 +90,7 @@ Describe 'Repository configuration' {
     It 'keeps the child app catalog explicit and scoped only to the child tier' {
         $script:Config.Apps.Count | Should -BeGreaterThan 0
         foreach ($app in $script:Config.Apps) {
-            $app.assignments.group | Should -Be @('sg-tier-child')
+            $app.assignments.group | Should -Be @('sg-youngest-children')
         }
 
         ($script:Config.Apps | Where-Object id -in @('android-defender', 'ios-defender')).assignments.intent |
