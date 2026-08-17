@@ -15,7 +15,6 @@
     "securityRequireSafetyNetAttestationBasicIntegrity": true,
     "securityRequireSafetyNetAttestationCertifiedDevice": true,
     "securityRequireIntuneAppIntegrity": true,
-    "requireNoPendingSystemUpdates": true,
     "osMinimumVersion": "11",
     "passwordRequired": true,
     "passwordMinimumLength": 6,

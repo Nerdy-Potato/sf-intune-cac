@@ -52,6 +52,44 @@ function Invoke-CaCPlan {
         }
     }
 
+    function Wait-CaCAppPublished {
+        param(
+            [Parameter(Mandatory)]
+            [string] $AppId,
+
+            [Parameter(Mandatory)]
+            [string] $Target,
+
+            [Parameter()]
+            [ValidateRange(1, 10)]
+            [int] $MaxAttempts = 6
+        )
+
+        for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+            try {
+                $appState = & $GraphInvoker 'GET' "deviceAppManagement/mobileApps/$AppId" $null
+            }
+            catch {
+                Write-Warning "Unable to read publishingState for app '$Target'. Proceeding with assignment. $($_.Exception.Message)"
+                return
+            }
+
+            if (-not (Test-CaCHasProperty -InputObject $appState -Name 'publishingState')) { return }
+
+            $publishingState = Get-CaCProperty -InputObject $appState -Name 'publishingState'
+            if ($publishingState -eq 'published') { return }
+
+            if ($attempt -eq $MaxAttempts) {
+                Write-Warning "App '$Target' is still in publishingState '$publishingState' after $MaxAttempts attempt(s). Proceeding with assignment."
+                return
+            }
+
+            $delay = 5 * [int] [Math]::Pow(2, $attempt - 1)
+            Write-Warning "App '$Target' is in publishingState '$publishingState'. Retrying in $delay second(s) (attempt $attempt of $MaxAttempts)."
+            Start-Sleep -Seconds $delay
+        }
+    }
+
     foreach ($action in @($Plan | Where-Object { $_.Action -in @('Skip', 'Prerequisite') })) {
         Add-Result -Action "$($action.Kind) $($action.Action)" -Target $action.Target -Status 'Skipped' `
             -Message ($action.Details -join '; ')
@@ -304,7 +342,13 @@ function Invoke-CaCPlan {
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'AppAssignment' })) {
-        $app = if ($action.Data.PSObject.Properties['App']) { $action.Data.App } else { $action.Data }
+        $actionData = Get-CaCProperty -InputObject $action -Name 'Data'
+        $app = if (Test-CaCHasProperty -InputObject $actionData -Name 'App') {
+            Get-CaCProperty -InputObject $actionData -Name 'App'
+        }
+        else {
+            $actionData
+        }
         if ($app -and ($blockedAppIds.ContainsKey($app.id) -or $failedAppIds.ContainsKey($app.id))) {
             Add-Result -Action 'Assign app' -Target $action.Target -Status 'Failed' `
                 -Message 'the app was skipped or failed in the reviewed plan'
@@ -314,8 +358,8 @@ function Invoke-CaCPlan {
         $appId = if ($appIds.ContainsKey($app.id)) {
             $appIds[$app.id]
         }
-        elseif ($action.Data.PSObject.Properties['Id']) {
-            $action.Data.Id
+        elseif (Test-CaCHasProperty -InputObject $actionData -Name 'Id') {
+            Get-CaCProperty -InputObject $actionData -Name 'Id'
         }
         else {
             $null
@@ -326,6 +370,8 @@ function Invoke-CaCPlan {
             continue
         }
         if (-not $PSCmdlet.ShouldProcess($action.Target, 'Assign app')) { continue }
+
+        Wait-CaCAppPublished -AppId $appId -Target $action.Target
 
         try {
             $assignments = @($app.assignments | ForEach-Object {
@@ -340,8 +386,8 @@ function Invoke-CaCPlan {
             Add-Result -Action 'Assign app' -Target $action.Target -Status 'Failed' -Message $_.Exception.Message
             continue
         }
-        if ($action.Data.PSObject.Properties['PreservedAssignments']) {
-            $assignments += @($action.Data.PreservedAssignments)
+        if (Test-CaCHasProperty -InputObject $actionData -Name 'PreservedAssignments') {
+            $assignments += @(Get-CaCProperty -InputObject $actionData -Name 'PreservedAssignments')
         }
         $operation = Invoke-CaCAction -Action 'Assign app' -Target $action.Target -Operation {
             & $GraphInvoker 'POST' "deviceAppManagement/mobileApps/$appId/assign" @{ mobileAppAssignments = $assignments } | Out-Null
@@ -354,7 +400,18 @@ function Invoke-CaCPlan {
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -in @('Create', 'Update') })) {
-        $policy = if ($action.Action -eq 'Create') { $action.Data } else { $action.Data.Policy }
+        $actionData = Get-CaCProperty -InputObject $action -Name 'Data'
+        $policy = if ($action.Action -eq 'Create') {
+            $actionData
+        }
+        else {
+            Get-CaCProperty -InputObject $actionData -Name 'Policy'
+        }
+        if (-not $policy) {
+            Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'Failed' `
+                -Message 'policy data is missing from the reviewed plan'
+            continue
+        }
         if ($policy -and ($blockedPolicyNames.ContainsKey($policy.payload.displayName) -or
                 $failedPolicyNames.ContainsKey($policy.payload.displayName))) {
             Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'Failed' `
@@ -384,8 +441,9 @@ function Invoke-CaCPlan {
                 return $created.id
             }
 
-            & $GraphInvoker 'PATCH' "$($endpoint.Path)/$($action.Data.Id)" $payload | Out-Null
-            return $action.Data.Id
+            $policyId = Get-CaCProperty -InputObject $actionData -Name 'Id'
+            & $GraphInvoker 'PATCH' "$($endpoint.Path)/$policyId" $payload | Out-Null
+            return $policyId
         }
         if (-not $operation.Succeeded) {
             $failedPolicyNames[$policy.payload.displayName] = $true
@@ -409,7 +467,13 @@ function Invoke-CaCPlan {
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Assignment' })) {
-        $policy = if ($action.Data.PSObject.Properties['Policy']) { $action.Data.Policy } else { $action.Data }
+        $actionData = Get-CaCProperty -InputObject $action -Name 'Data'
+        $policy = if (Test-CaCHasProperty -InputObject $actionData -Name 'Policy') {
+            Get-CaCProperty -InputObject $actionData -Name 'Policy'
+        }
+        else {
+            $actionData
+        }
         if ($policy -and ($blockedPolicyNames.ContainsKey($policy.payload.displayName) -or
                 $failedPolicyNames.ContainsKey($policy.payload.displayName))) {
             Add-Result -Action 'Assign policy' -Target $action.Target -Status 'Failed' `
@@ -422,8 +486,8 @@ function Invoke-CaCPlan {
         $policyId = if ($policyIds.ContainsKey($policy.payload.displayName)) {
             $policyIds[$policy.payload.displayName]
         }
-        elseif ($action.Data.PSObject.Properties['Id']) {
-            $action.Data.Id
+        elseif (Test-CaCHasProperty -InputObject $actionData -Name 'Id') {
+            Get-CaCProperty -InputObject $actionData -Name 'Id'
         }
         else {
             $null
