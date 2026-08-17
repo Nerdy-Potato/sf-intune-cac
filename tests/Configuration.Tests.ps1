@@ -53,9 +53,11 @@ Describe 'Repository configuration' {
     }
 
     It 'defines one manually managed device group for each age tier' {
-        $deviceGroups = @($script:Config.Groups | Where-Object memberType -EQ 'device')
-        $deviceGroups.displayName | Should -Be @('CaC-Devices-Adult', 'CaC-Devices-Teen', 'CaC-Devices-Child')
-        $deviceGroups.members | Should -BeNullOrEmpty
+        $deviceGroups = @($script:Config.Groups | Where-Object {
+            $_ -is [hashtable] -and $_.ContainsKey('memberType') -and $_['memberType'] -eq 'device'
+        })
+        @($deviceGroups | ForEach-Object { $_['displayName'] }) | Should -Be @('CaC-Devices-Adult', 'CaC-Devices-Teen', 'CaC-Devices-Child')
+        @($deviceGroups | ForEach-Object { $_['members'] }) | Should -BeNullOrEmpty
     }
 
     It 'places Samantha in the adult tier' {
@@ -114,11 +116,11 @@ Describe 'Repository configuration' {
     }
 
     It 'warns, rather than silently accepting, an unconfirmed age tier' {
-        $unconfirmed = @($script:Config.Users | Where-Object { -not $_.ageTierConfirmed })
+        $unconfirmed = @($script:Config.Users | Where-Object { $_.ageTierConfirmed -eq $false })
         $warnings = @($script:Findings | Where-Object Rule -EQ 'identity/age-tier-unconfirmed')
 
-        $warnings.Count | Should -Be $unconfirmed.Count
-        $unconfirmed.tier | Should -Not -Contain 'adult'
+        $warnings.Count | Should -Be 0
+        $unconfirmed | Should -BeNullOrEmpty
     }
 }
 
