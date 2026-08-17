@@ -157,24 +157,30 @@ than an hour with no other explanation), approve every package once:
 `Get-CaCPayloadDrift` intentionally excludes `@odata.type` from its comparison (Graph does not allow
 converting one concrete app type into another via `PATCH` - the type is immutable at creation), and
 `Get-CaCRemoteAppCandidates` matches remote objects to config purely by `packageId`/`bundleId`. If a
-live app object was ever created with the wrong concrete type (for example, `androidManagedStoreApp`
-- a real but legacy/beta Graph type - instead of the `managedAndroidStoreApp` type this repository's
-config declares), the plan/deploy loop will report `NoChange` for it forever; nothing here surfaces
-that drift automatically today.
+live app object was ever created with a different concrete type than config declares, the plan/deploy
+loop will report `NoChange` for it forever; nothing here surfaces that drift automatically today.
 
-This happened in practice: ten Android app objects were originally created as
-`androidManagedStoreApp` before `config/apps/approved-child-apps.json` was corrected to
-`managedAndroidStoreApp`. Both are genuine Managed Google Play object types, so they still showed
-"Managed Google Play Store app" (not literally "Built-in") in the Intune portal, but the mismatch
-meant the wrongly-typed originals kept existing side-by-side with the newer, correctly-typed
-objects. `scripts/bootstrap/Get-CaCAppInventory.ps1` (run via the `Inventory Intune apps` workflow)
-is a read-only diagnostic that lists every live app object's actual `@odata.type` next to what
-config declares for that `packageId`/`bundleId`, so this class of drift can be checked for on
-demand. `scripts/bootstrap/Get-CaCAppAssignments.ps1` (via `Inspect Intune app assignments`) can
-then confirm which duplicate actually carries the live group assignments before anything is
-deleted with `Remove-CaCStuckApp.ps1`. Permanently detecting this in the core plan/deploy
-reconciliation loop is still open - see the module's `Get-CaCPayloadDrift`/
-`Get-CaCAppAssignmentDrift` for where that would need to change.
+This happened in practice: ten Android app objects were originally created (via manual Managed
+Google Play approval in the portal) as `androidManagedStoreApp` - a real but legacy/beta Graph type -
+while `config/apps/approved-child-apps.json` had been changed at one point to declare the newer
+`managedAndroidStoreApp` type. Both are genuine Managed Google Play object types, so they still
+showed "Managed Google Play Store app" (not literally "Built-in") in the Intune portal, but the
+mismatch meant Graph rejected `PATCH` requests built from config's payload with a generic
+`ModelValidationFailure` (400) once the plan engine actually tried to write to these objects (for
+example, during one-time adoption of manually-approved apps). The fix was to correct config to
+declare the type that actually matches the live objects (`androidManagedStoreApp`), since the type
+is immutable and cannot be changed after creation - config must describe reality, not the newer type
+name. `scripts/bootstrap/Get-CaCAppInventory.ps1` (run via the `Inventory Intune apps` workflow) is a
+read-only diagnostic that lists every live app object's actual `@odata.type` next to what config
+declares for that `packageId`/`bundleId`, so this class of drift can be checked for on demand.
+`scripts/bootstrap/Get-CaCAppAssignments.ps1` (via `Inspect Intune app assignments`) can then confirm
+which duplicate actually carries the live group assignments before anything is deleted with
+`Remove-CaCStuckApp.ps1`. Permanently detecting this in the core plan/deploy reconciliation loop is
+still open - see the module's `Get-CaCPayloadDrift`/`Get-CaCAppAssignmentDrift` for where that would
+need to change. Separately, the one-time `Adopt` action's `PATCH` (in `Invoke-CaCPlan.ps1`) must
+always include `@odata.type` in its request body - Graph's polymorphic `mobileApps` collection
+returns the same generic `ModelValidationFailure` for *any* partial `PATCH`, even a single-field one,
+if the concrete type is omitted.
 
 ## 6. Confirm the tenant details
 
