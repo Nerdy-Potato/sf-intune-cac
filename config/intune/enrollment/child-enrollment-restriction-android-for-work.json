@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Part of the per-platform migration of the child corporate-owned enrollment restriction.",
+    "See child-enrollment-restriction-android.json for the migration background.",
+    "Android Enterprise (Android for Work) is the corporate-owned Android enrollment path;",
+    "personal-device enrollment stays blocked, requires a minimum OS version."
+  ],
+  "name": "child-enrollment-restriction-android-for-work",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Corporate-Owned Child Devices (Android for Work)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 1,
+    "platformType": "androidForWork",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": false,
+      "personalDeviceEnrollmentBlocked": true,
+      "osMinimumVersion": "11",
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}
