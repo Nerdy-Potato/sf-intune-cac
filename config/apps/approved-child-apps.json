@@ -16,7 +16,8 @@
         "description": "Required MDE and Global Secure Access client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.scmx",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.scmx"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.scmx",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -30,7 +31,8 @@
         "description": "Required Entra device registration and authentication client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.azure.authenticator",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.azure.authenticator"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.azure.authenticator",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -44,7 +46,8 @@
         "description": "Approved Microsoft 365 productivity and Copilot client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.office.officehubrow",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.officehubrow"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.officehubrow",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -58,7 +61,8 @@
         "description": "Approved Microsoft Word client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.office.word",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.word"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.word",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -72,7 +76,8 @@
         "description": "Approved Microsoft Excel client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.office.excel",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.excel"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.excel",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -86,7 +91,8 @@
         "description": "Approved Microsoft PowerPoint client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.office.powerpoint",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.powerpoint"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.powerpoint",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -100,7 +106,8 @@
         "description": "Approved Microsoft OneNote client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.office.onenote",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.onenote"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.onenote",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -114,7 +121,8 @@
         "description": "Approved Microsoft Outlook client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.office.outlook",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.outlook"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.outlook",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -128,7 +136,8 @@
         "description": "Approved Microsoft Teams client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.teams",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.teams"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.teams",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -142,7 +151,8 @@
         "description": "Approved Microsoft OneDrive client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.skydrive",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.skydrive"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.skydrive",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
@@ -156,7 +166,8 @@
         "description": "Approved Microsoft Edge client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.emmx",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.emmx"
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.emmx",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
     },
