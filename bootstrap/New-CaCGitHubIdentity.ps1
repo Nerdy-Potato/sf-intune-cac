@@ -39,6 +39,12 @@ param(
     [string] $ExpectedTenantDomain = 'nerdypotato.onmicrosoft.com',
 
     [Parameter()]
+    [long] $GitHubOrganizationId = 317626810,
+
+    [Parameter()]
+    [long] $GitHubRepositoryId = 1336208931,
+
+    [Parameter()]
     [switch] $Force
 )
 
@@ -60,6 +66,11 @@ if ($ExpectedTenantDomain -notin $domains -and -not $Force) {
 Write-Host "Tenant: $($organization.displayName) [$($organization.id)]"
 Write-Host "Repository: $Repository"
 
+$numericRepository = if ($GitHubOrganizationId -and $GitHubRepositoryId) {
+    $parts = $Repository -split '/', 2
+    "$($parts[0])@$GitHubOrganizationId/$($parts[1])@$GitHubRepositoryId"
+}
+
 $graphAppId = '00000003-0000-0000-c000-000000000000'
 $graphSp = (Invoke-MgGraphRequest -Method GET -Uri "v1.0/servicePrincipals?`$filter=appId eq '$graphAppId'").value[0]
 
@@ -77,6 +88,8 @@ $applications = @(
         Subjects = @(
             "repo:$($Repository):pull_request"
             "repo:$($Repository):environment:plan"
+            "repo:$($numericRepository):pull_request"
+            "repo:$($numericRepository):environment:plan"
         )
     }
     @{
@@ -91,6 +104,7 @@ $applications = @(
         )
         Subjects = @(
             "repo:$($Repository):environment:production"
+            "repo:$($numericRepository):environment:production"
         )
     }
 )
