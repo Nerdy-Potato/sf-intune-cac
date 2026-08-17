@@ -47,7 +47,7 @@ Describe 'Deployment action propagation' {
             Should -Be 'Failed'
     }
 
-    It 'tolerates the Graph RoleScopeTagIds-only PATCH restriction on legacy Android app Update actions' {
+    It 'tolerates the Graph RoleScopeTagIds-only PATCH restriction on legacy Android app Update actions (direct message shape)' {
         $androidApp = $script:Configuration.Apps | Where-Object { $_.payload.'@odata.type' -eq '#microsoft.graph.androidManagedStoreApp' } |
             Select-Object -First 1
         $plan = [pscustomobject]@{
@@ -80,6 +80,76 @@ Describe 'Deployment action propagation' {
         # "property 'Data' cannot be found" error instead of applying the update.
         $results | Where-Object Action -EQ 'Update app' | Select-Object -ExpandProperty Status |
             Should -Be 'Applied'
+    }
+
+    It 'tolerates the same Android app Update restriction when Graph wraps it in a generic AppLifecycle proxy 400 (no RoleScopeTagIds text)' {
+        # Observed live: Graph does not always return the direct "Patching only 'RoleScopeTagIds'
+        # is supported." message for this restriction. It sometimes wraps the identical rejection
+        # in a generic AppLifecycle/StatelessAppMetadataFEService proxy envelope instead, with no
+        # mention of RoleScopeTagIds at all. Tolerance must not depend on that unstable message text.
+        $androidApp = $script:Configuration.Apps | Where-Object { $_.payload.'@odata.type' -eq '#microsoft.graph.androidManagedStoreApp' } |
+            Select-Object -First 1
+        $plan = [pscustomobject]@{
+            Kind    = 'App'
+            Action  = 'Update'
+            Target  = $androidApp.payload.displayName
+            Details = @()
+            Data    = [pscustomobject]@{
+                App = $androidApp
+                Id  = 'existing-object-id'
+            }
+        }
+
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            if ($Method -eq 'PATCH' -and $Uri -match 'mobileApps') {
+                throw 'Response status code does not indicate success: 400 (Bad Request). Response body: ' +
+                '{"error":{"code":"BadRequest","message":"{\"_version\":3,\"Message\":\"An error has occurred ' +
+                '- Operation ID (for customer support): 00000000-0000-0000-0000-000000000000 - Activity ID: ' +
+                'aaaaaaaa-0000-0000-0000-000000000000 - Url: https://proxy.example.manage.microsoft.com/' +
+                'AppLifecycle_2607/StatelessAppMetadataFEService/deviceAppManagement/mobileApps(''abc'')' +
+                '?api-version=5026-07-08\"}"}}'
+            }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        $results | Where-Object Action -EQ 'Update app' | Select-Object -ExpandProperty Status |
+            Should -Be 'Applied'
+    }
+
+    It 'does NOT tolerate a 400 on a non-Android app Update action (restriction is scoped to androidManagedStoreApp only)' {
+        $nonAndroidApp = $script:Configuration.Apps | Where-Object { $_.payload.'@odata.type' -ne '#microsoft.graph.androidManagedStoreApp' } |
+            Select-Object -First 1
+        $plan = [pscustomobject]@{
+            Kind    = 'App'
+            Action  = 'Update'
+            Target  = $nonAndroidApp.payload.displayName
+            Details = @()
+            Data    = [pscustomobject]@{
+                App = $nonAndroidApp
+                Id  = 'existing-object-id'
+            }
+        }
+
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            if ($Method -eq 'PATCH' -and $Uri -match 'mobileApps') {
+                throw 'Response status code does not indicate success: 400 (Bad Request). Response body: ' +
+                '{"error":{"code":"BadRequest","message":"Some unrelated validation failure."}}'
+            }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        $results | Where-Object Action -EQ 'Update app' | Select-Object -ExpandProperty Status |
+            Should -Be 'Failed'
     }
 
     It 'does not silently ignore a failed action in an apply plan' {

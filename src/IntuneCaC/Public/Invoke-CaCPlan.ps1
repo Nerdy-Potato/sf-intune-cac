@@ -336,14 +336,21 @@ function Invoke-CaCPlan {
             }
             catch {
                 # Some legacy/beta Managed Google Play app objects (androidManagedStoreApp) reject
-                # every PATCH field except roleScopeTagIds - Graph returns 400 "Patching only
-                # 'RoleScopeTagIds' is supported." for these, even with @odata.type included.
+                # every PATCH field except roleScopeTagIds. Graph's error text for this is NOT
+                # stable: it sometimes returns the direct 400 "Patching only 'RoleScopeTagIds' is
+                # supported." message, and other times wraps the identical restriction in a
+                # generic AppLifecycle/StatelessAppMetadataFEService proxy envelope ("An error has
+                # occurred - Operation ID...") with no mention of RoleScopeTagIds at all. Matching
+                # on exact message text is therefore unreliable; match on the known-restricted app
+                # type plus a 400 status instead, which is stable across both error shapes.
                 # Adoption tracking does not depend on this cosmetic description marker:
                 # Get-CaCRemoteAppCandidates matches remote apps by packageId/bundleId only, never
                 # by description. Treat this specific, expected rejection as a successful no-op
                 # adoption instead of failing the app (and cascading to its downstream
                 # assignment/app-config actions).
-                if ($_.Exception.Message -notlike "*Patching only*RoleScopeTagIds*supported*") {
+                $isTolerableAndroidStoreAppRestriction = $app.payload.'@odata.type' -eq '#microsoft.graph.androidManagedStoreApp' -and
+                    $_.Exception.Message -like '*400 (Bad Request)*'
+                if (-not $isTolerableAndroidStoreAppRestriction) {
                     throw
                 }
             }
@@ -390,10 +397,14 @@ function Invoke-CaCPlan {
             catch {
                 # Same legacy Managed Google Play API restriction handled in the Adopt step above:
                 # some androidManagedStoreApp objects reject every PATCH field except
-                # roleScopeTagIds. Assignment (a separate Graph action below) is what actually
-                # matters for the app to reach devices, so tolerate this specific, expected
-                # rejection here too rather than blocking assignment.
-                if ($_.Exception.Message -notlike "*Patching only*RoleScopeTagIds*supported*") {
+                # roleScopeTagIds, and Graph's error text for it is not stable (see the Adopt-step
+                # comment for the two observed shapes). Match on app type + 400 status rather than
+                # message text. Assignment (a separate Graph action below) is what actually matters
+                # for the app to reach devices, so tolerate this specific, expected rejection here
+                # too rather than blocking assignment.
+                $isTolerableAndroidStoreAppRestriction = $app.payload.'@odata.type' -eq '#microsoft.graph.androidManagedStoreApp' -and
+                    $_.Exception.Message -like '*400 (Bad Request)*'
+                if (-not $isTolerableAndroidStoreAppRestriction) {
                     throw
                 }
             }
