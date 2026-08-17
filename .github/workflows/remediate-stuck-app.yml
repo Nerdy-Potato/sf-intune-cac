@@ -63,4 +63,8 @@ jobs:
             throw 'No app ids were provided. Pass a comma-separated app_ids input.'
           }
 
-          ./scripts/bootstrap/Remove-CaCStuckApp.ps1 -AppId $appIds
+          # -Confirm:$false disables the interactive ShouldProcess prompt, which has no
+          # interactive host to attach to on the runner and throws a null-reference error.
+          # The "Require explicit confirmation" step above (gated on inputs.confirm) is the
+          # real authorization gate for this solo-maintainer remediation workflow.
+          ./scripts/bootstrap/Remove-CaCStuckApp.ps1 -AppId $appIds -Confirm:$false

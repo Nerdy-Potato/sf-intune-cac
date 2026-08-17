@@ -174,6 +174,10 @@ Describe 'Workflow trigger and permission safety' {
         $script:StuckAppWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
         $script:StuckAppWorkflow | Should -Match 'Remove-CaCStuckApp\.ps1'
     }
+
+    It 'invokes stuck-app remediation non-interactively so ShouldProcess does not prompt on the runner' {
+        $script:StuckAppWorkflow | Should -Match 'Remove-CaCStuckApp\.ps1\s+-AppId\s+\$appIds\s+-Confirm:\$false'
+    }
 }
 
 Describe 'Bootstrap and managed-object safety' {
