@@ -6,7 +6,7 @@
   ],
   "name": "windows-update-ring-pilot",
   "resource": "deviceConfigurations",
-  "assignments": [{ "group": "sg-tier-adult", "intent": "include" }],
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
   "payload": {
     "@odata.type": "#microsoft.graph.windowsUpdateForBusinessConfiguration",
     "displayName": "CaC - Windows - Update Ring 1 (Pilot)",

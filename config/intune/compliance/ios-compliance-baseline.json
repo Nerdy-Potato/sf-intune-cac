@@ -3,7 +3,10 @@
   "comment": "Security-only compliance floor for iOS/iPadOS. Applies to every tier - this is not a parenting control.",
   "name": "ios-compliance-baseline",
   "resource": "deviceCompliancePolicies",
-  "assignments": [{ "group": "sg-productivity-all", "intent": "include" }],
+  "assignments": [
+    { "group": "sg-tier-child", "intent": "include" },
+    { "group": "sg-tier-teen", "intent": "include" }
+  ],
   "payload": {
     "@odata.type": "#microsoft.graph.iosCompliancePolicy",
     "displayName": "CaC - iOS - Compliance Baseline",

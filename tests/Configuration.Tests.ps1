@@ -103,12 +103,12 @@ Describe 'Repository configuration' {
             Should -Be @('required', 'required')
     }
 
-    It 'puts the parents in a separate, earlier Windows update ring than everyone else' {
+    It 'keeps Windows update rings out of the adult tier' {
         $pilot = $script:Config.Policies | Where-Object name -EQ 'windows-update-ring-pilot'
         $broad = $script:Config.Policies | Where-Object name -EQ 'windows-update-ring-broad'
 
-        $pilot.assignments.Where({ $_.intent -eq 'include' }).group | Should -Be 'sg-tier-adult'
-        $broad.assignments.Where({ $_.intent -eq 'exclude' }).group | Should -Be 'sg-tier-adult'
+        $pilot.assignments.Where({ $_.intent -eq 'include' }).group | Should -Be 'sg-tier-child'
+        $broad.assignments.Where({ $_.intent -eq 'include' }).group | Should -Be @('sg-tier-child', 'sg-tier-teen')
         $broad.payload.qualityUpdatesDeferralPeriodInDays |
             Should -BeGreaterThan $pilot.payload.qualityUpdatesDeferralPeriodInDays
     }
