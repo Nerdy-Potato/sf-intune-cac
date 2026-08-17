@@ -56,7 +56,24 @@ Describe 'Repository configuration' {
         $script:Config.Tenant.adoption.oneTime | Should -BeTrue
         $script:Config.Tenant.adoption.enabled | Should -BeTrue
         $script:Config.Tenant.adoption.groups.id | Should -Be 'sg-autopilot-device-preparation-child'
-        @($script:Config.Tenant.adoption.apps | ForEach-Object id) | Should -Be @()
+
+        $expectedAppIds = @(
+            'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
+            'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
+            'android-onedrive', 'android-edge'
+        )
+        (@($script:Config.Tenant.adoption.apps | ForEach-Object id) | Sort-Object) |
+            Should -Be (@($expectedAppIds) | Sort-Object)
+
+        $appsById = @{}
+        foreach ($app in $script:Config.Apps) { $appsById[$app.id] = $app }
+        foreach ($spec in $script:Config.Tenant.adoption.apps) {
+            $app = $appsById[$spec.id]
+            $app | Should -Not -BeNullOrEmpty -Because "adoption spec '$($spec.id)' must reference a catalog app"
+            $configuredIdentity = $app.payload.($spec.identity.kind)
+            $spec.identity.value | Should -Be $configuredIdentity -Because `
+                "adoption spec '$($spec.id)' identity must match its own catalog entry's $($spec.identity.kind)"
+        }
     }
 
     It 'defines one manually managed device group for each age tier' {
