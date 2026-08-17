@@ -8,8 +8,11 @@
     "Windows entries use source=existing: Microsoft Store (new)/winget-backed apps cannot be created",
     "over Graph the way Managed Google Play and iOS Store apps can, so the app must be added once in",
     "the Intune admin center (Apps > Windows > Add > Microsoft Store app (new), searching the exact",
-    "displayName below) before this repo can manage its assignment. Until then, deploy reports a",
-    "harmless 'Prerequisite' action instead of failing."
+    "displayName below) before this repo can manage its assignment. A 'Prerequisite' action reports",
+    "cleanly in plan mode, but blocks the reviewed-plan deployment gate entirely (it counts the same",
+    "as Skip) - so no Windows entry should be added to this catalog until its Intune bootstrap step",
+    "is done. Moonlight/Windows App/Xbox for Windows are intentionally deferred for this reason; see",
+    "the sg-nuclear-family decision log for the bootstrap steps to add them in a follow-up."
   ],
   "apps": [
     {
@@ -476,42 +479,6 @@
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
       "assignments": []
-    },
-    {
-      "id": "windows-moonlight",
-      "platform": "windows",
-      "source": "existing",
-      "payload": {
-        "@odata.type": "#microsoft.graph.winGetApp",
-        "displayName": "Moonlight Game Streaming",
-        "description": "Approved Moonlight game streaming client. Managed by sf-intune-cac. Must be added once via Microsoft Store app (new) before this repo can assign it - see docs/bootstrap.md.",
-        "publisher": "Moonlight Game Streaming Project"
-      },
-      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
-    },
-    {
-      "id": "windows-windows-app",
-      "platform": "windows",
-      "source": "existing",
-      "payload": {
-        "@odata.type": "#microsoft.graph.winGetApp",
-        "displayName": "Windows App",
-        "description": "Approved Windows App (Microsoft remote desktop/Windows 365 client). Managed by sf-intune-cac. Must be added once via Microsoft Store app (new) before this repo can assign it - see docs/bootstrap.md.",
-        "publisher": "Microsoft Corporation"
-      },
-      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
-    },
-    {
-      "id": "windows-xbox",
-      "platform": "windows",
-      "source": "existing",
-      "payload": {
-        "@odata.type": "#microsoft.graph.winGetApp",
-        "displayName": "Xbox",
-        "description": "Approved Xbox companion/streaming client. Managed by sf-intune-cac. Must be added once via Microsoft Store app (new) before this repo can assign it - see docs/bootstrap.md.",
-        "publisher": "Microsoft Corporation"
-      },
-      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
     }
   ]
 }
