@@ -170,7 +170,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-m365-copilot",
@@ -186,7 +186,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-word",
@@ -202,7 +202,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-excel",
@@ -218,7 +218,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-powerpoint",
@@ -234,7 +234,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-onenote",
@@ -250,7 +250,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-outlook",
@@ -266,7 +266,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-teams",
@@ -282,7 +282,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-onedrive",
@@ -298,7 +298,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": []
     },
     {
       "id": "ios-edge",
@@ -314,7 +314,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": []
     }
   ]
 }

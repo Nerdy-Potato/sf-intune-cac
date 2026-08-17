@@ -8,6 +8,7 @@ plan/
 *.log
 .vscode/
 .idea/
+testResults.xml
 
 # Never commit credentials
 *.pfx
