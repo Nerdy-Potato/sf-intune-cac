@@ -10,6 +10,8 @@ BeforeAll {
     $script:CiWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/ci.yml') -Raw
     $script:Bootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1') -Raw
     $script:SoloRecoveryBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1') -Raw
+    $script:StuckAppBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Remove-CaCStuckApp.ps1') -Raw
+    $script:StuckAppWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/remediate-stuck-app.yml') -Raw
     $script:IosGsa = Get-Content -Path (Join-Path $script:RepoRoot 'config/intune/device-configuration/ios-gsa-child.json') -Raw |
         ConvertFrom-Json
 }
@@ -158,6 +160,20 @@ Describe 'Workflow trigger and permission safety' {
         $script:CiWorkflow | Should -Match 'Invoke-Pester'
         $script:CiWorkflow | Should -Match 'Invoke-CaC\.ps1\s+-Mode\s+validate'
     }
+
+    It 'keeps stuck-app remediation manual-only and confirmation gated' {
+        $script:StuckAppWorkflow | Should -Match 'workflow_dispatch:'
+        $script:StuckAppWorkflow | Should -Not -Match '(?m)^\s*pull_request:\s*$'
+        $script:StuckAppWorkflow | Should -Not -Match '(?m)^\s*push:\s*$'
+        $script:StuckAppWorkflow | Should -Match 'app_ids:'
+        $script:StuckAppWorkflow | Should -Match 'confirm:'
+        $script:StuckAppWorkflow | Should -Match '(?is)confirm:.*?default:\s*false'
+        $script:StuckAppWorkflow | Should -Match '(?m)^\s*contents:\s*read\s*$'
+        $script:StuckAppWorkflow | Should -Match '(?m)^\s*id-token:\s*write\s*$'
+        $script:StuckAppWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
+        $script:StuckAppWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
+        $script:StuckAppWorkflow | Should -Match 'Remove-CaCStuckApp\.ps1'
+    }
 }
 
 Describe 'Bootstrap and managed-object safety' {
@@ -178,5 +194,16 @@ Describe 'Bootstrap and managed-object safety' {
     It 'refuses ambiguous Autopilot group matches before changing ownership' {
         $script:Bootstrap | Should -Match '(?is)\$groupCandidates\.Count\s*-gt\s*1.*?throw'
         $script:Bootstrap | Should -Match 'Refusing to choose an ownership target by display name'
+    }
+
+    It 'uses the module Graph auth pattern and WhatIf protection for stuck app deletes' {
+        $script:StuckAppBootstrap | Should -Match 'CmdletBinding\(SupportsShouldProcess,\s*ConfirmImpact\s*=\s*''High'''
+        $script:StuckAppBootstrap | Should -Match 'Connect-CaCGraph\s+-TenantId\s+\$TenantId\s+-ClientId\s+\$ClientId'
+        $script:StuckAppBootstrap | Should -Match 'NewBoundScriptBlock'
+        $script:StuckAppBootstrap | Should -Match 'Invoke-CaCGraphRequest\s+-Method\s+\$Method\s+-Uri\s+\$Uri\s+-Body\s+\$Body'
+        $script:StuckAppBootstrap | Should -Match 'publishingState'
+        $script:StuckAppBootstrap | Should -Match 'deviceAppManagement/mobileApps/\$normalizedAppId'
+        $script:StuckAppBootstrap | Should -Match 'ShouldProcess'
+        $script:StuckAppBootstrap | Should -Match 'DELETE'
     }
 }
