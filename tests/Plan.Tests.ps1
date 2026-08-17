@@ -74,9 +74,13 @@ BeforeAll {
             foreach ($policy in $script:Config.Policies | Where-Object {
                     $null -ne $_.PSObject.Properties['targetApps']
                 }) {
-                $remotePolicy = $state.Policies[$policy.resource] |
-                    Where-Object displayName -EQ $policy.payload.displayName |
-                    Select-Object -First 1
+                $policyObjects = @($state.Policies[$policy.resource])
+                $policyIndex = 0
+                while ($policyIndex -lt $policyObjects.Count -and
+                    $policyObjects[$policyIndex].displayName -ne $policy.payload.displayName) {
+                    $policyIndex++
+                }
+                $remotePolicy = $policyObjects[$policyIndex]
                 $targetIds = @($policy.targetApps | ForEach-Object {
                         $targetApp = $script:Config.Apps | Where-Object id -EQ $_
                         ($state.Apps | Where-Object {
@@ -85,7 +89,9 @@ BeforeAll {
                                 $_.displayName -eq $targetApp.payload.displayName
                             } | Select-Object -First 1).id
                     })
-                $remotePolicy | Add-Member -NotePropertyName targetedMobileApps -NotePropertyValue $targetIds
+                $policyObjects[$policyIndex] = $remotePolicy | Add-Member -Force -PassThru `
+                    -NotePropertyName targetedMobileApps -NotePropertyValue $targetIds
+                $state.Policies[$policy.resource] = $policyObjects
             }
         }
 
@@ -121,7 +127,19 @@ BeforeAll {
                 }
                 default {
                     $resource = ($Uri -split '/')[-1]
-                    return [pscustomobject]@{ value = @($State.Policies[$resource]) }
+                    $objects = @($State.Policies[$resource])
+                    if ($resource -eq 'mobileAppConfigurations') {
+                        $objects = @($objects | ForEach-Object {
+                                if ($_.displayName -eq 'CaC - Android - Defender and GSA (Child)') {
+                                    $_ | Add-Member -Force -PassThru -NotePropertyName targetedMobileApps `
+                                        -NotePropertyValue @('app-1')
+                                }
+                                else {
+                                    $_
+                                }
+                            })
+                    }
+                    return [pscustomobject]@{ value = $objects }
                 }
             }
         }.GetNewClosure()
