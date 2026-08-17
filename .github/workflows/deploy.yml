@@ -74,7 +74,7 @@ jobs:
             const pullRequest = pullRequests.find(pr =>
               pr.merged_at &&
               (recovery
-                ? pr.head.sha === '${{ inputs.reviewed_sha }}' && pr.merge_commit_sha === sha
+                ? pr.head.sha === '${{ inputs.reviewed_sha }}'
                 : pr.merge_commit_sha === sha)
             );
 
@@ -84,6 +84,21 @@ jobs:
                 'Deployments must come from a reviewed pull request.'
               );
               return;
+            }
+
+            if (recovery) {
+              const lineage = await github.rest.repos.compareCommits({
+                owner,
+                repo,
+                base: pullRequest.merge_commit_sha,
+                head: sha
+              });
+              if (!['ahead', 'identical'].includes(lineage.data.status)) {
+                core.setFailed(
+                  `Current main commit ${sha} does not contain reviewed merge commit ${pullRequest.merge_commit_sha}.`
+                );
+                return;
+              }
             }
 
             if (!recovery) {
