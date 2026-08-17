@@ -61,7 +61,9 @@ $graphInvoker = $module.NewBoundScriptBlock({
 $configuration = Get-CaCConfiguration -Path (Join-Path $repoRoot 'config')
 $configuredByPackageOrBundle = @{}
 foreach ($app in $configuration.Apps) {
-    $key = if ($app.payload.packageId) { $app.payload.packageId } elseif ($app.payload.bundleId) { $app.payload.bundleId } else { $null }
+    $configuredPackageId = Get-CaCProperty -InputObject $app.payload -Name 'packageId'
+    $configuredBundleId = Get-CaCProperty -InputObject $app.payload -Name 'bundleId'
+    $key = if ($configuredPackageId) { $configuredPackageId } elseif ($configuredBundleId) { $configuredBundleId } else { $null }
     if ($key) { $configuredByPackageOrBundle[$key] = $app }
 }
 
