@@ -132,6 +132,10 @@ Describe 'Workflow trigger and permission safety' {
 
     It 'requires the production environment and defaults deletion approval to false' {
         $script:DeployWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
+        $script:DeployWorkflow | Should -Match 'confirm_deploy:'
+        $script:DeployWorkflow | Should -Match 'reviewed_sha:'
+        $script:DeployWorkflow | Should -Match 'plan_run_id:'
+        $script:DeployWorkflow | Should -Match 'Recovery deployment requires confirm_deploy=true'
         $script:DeployWorkflow | Should -Match '(?is)allow_delete:.*?default:\s*false'
         $script:DeployWorkflow | Should -Match '(?m)^\s*contents:\s*read\s*$'
         $script:DeployWorkflow | Should -Match '(?m)^\s*id-token:\s*write\s*$'
