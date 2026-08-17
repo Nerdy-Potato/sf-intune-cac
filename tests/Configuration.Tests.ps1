@@ -62,7 +62,9 @@ Describe 'Repository configuration' {
         $expectedAppIds = @(
             'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
             'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
-            'android-onedrive', 'android-edge'
+            'android-onedrive', 'android-edge',
+            'android-spotify-kids', 'android-moonlight', 'android-steam-link',
+            'android-windows-app', 'android-xbox'
         )
         (@($script:Config.Tenant.adoption.apps | ForEach-Object id) | Sort-Object) |
             Should -Be (@($expectedAppIds) | Sort-Object)

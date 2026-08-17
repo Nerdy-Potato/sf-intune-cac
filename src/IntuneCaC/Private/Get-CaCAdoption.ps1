@@ -19,7 +19,9 @@ function Get-CaCAdoptionSpec {
         'android-authenticator', 'ios-authenticator',
         'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
         'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
-        'android-onedrive', 'android-edge'
+        'android-onedrive', 'android-edge',
+        'android-spotify-kids', 'android-moonlight', 'android-steam-link',
+        'android-windows-app', 'android-xbox'
     )
     if (($Kind -eq 'Group' -and $Id -notin $adoptableGroupIds) -or
         ($Kind -eq 'App' -and $Id -notin $adoptableAppIds)) {

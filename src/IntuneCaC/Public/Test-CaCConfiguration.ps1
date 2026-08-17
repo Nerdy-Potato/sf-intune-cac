@@ -108,7 +108,9 @@ function Test-CaCConfiguration {
             'android-authenticator', 'ios-authenticator',
             'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
             'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
-            'android-onedrive', 'android-edge'
+            'android-onedrive', 'android-edge',
+            'android-spotify-kids', 'android-moonlight', 'android-steam-link',
+            'android-windows-app', 'android-xbox'
         )
         foreach ($spec in @(Get-CaCProperty -InputObject $adoption -Name 'apps' | Where-Object { $_ })) {
             $specId = Get-CaCProperty -InputObject $spec -Name 'id'
