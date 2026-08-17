@@ -105,13 +105,23 @@ Describe 'Repository configuration' {
     It 'keeps the child app catalog explicit and scoped only to the child tier' {
         $script:Config.Apps.Count | Should -BeGreaterThan 0
         foreach ($app in $script:Config.Apps) {
-            $app.assignments.group | Should -Be @('sg-tier-child')
+            if (@($app.assignments).Count -gt 0) {
+                $app.assignments.group | Should -Be @('sg-tier-child')
+            }
         }
 
         $script:Config.Apps.id | Should -Not -Contain 'android-authenticator'
         $script:Config.Apps.id | Should -Not -Contain 'ios-authenticator'
-        ($script:Config.Apps | Where-Object id -in @('android-defender', 'ios-defender')).assignments.intent |
-            Should -Be @('required', 'required')
+
+        # The tenant has no Apple Business Manager / App Store review connection, so iOS store
+        # apps sit permanently in publishingState 'processing'. Assigning an unpublished app
+        # fails deployment with "Invalid operation: app's PublishingState is not 'Published'".
+        # There are no iOS kid devices today, so iOS entries stay in the catalog (for when that
+        # changes) but unassigned until the tenant can actually publish them.
+        $iosAssignmentCount = ($script:Config.Apps | Where-Object platform -EQ 'ios' |
+            ForEach-Object { @($_.assignments).Count } | Measure-Object -Sum).Sum
+        $iosAssignmentCount | Should -Be 0
+        ($script:Config.Apps | Where-Object id -EQ 'android-defender').assignments.intent | Should -Be @('required')
     }
 
     It 'keeps Windows update rings out of the adult tier' {
