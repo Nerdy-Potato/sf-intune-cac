@@ -68,19 +68,21 @@ foreach ($app in $configuration.Apps) {
 $remoteApps = @((& $graphInvoker 'GET' 'deviceAppManagement/mobileApps' $null).value | Where-Object { $_ })
 
 $rows = foreach ($remote in $remoteApps) {
-    $key = if ($remote.packageId) { $remote.packageId } elseif ($remote.bundleId) { $remote.bundleId } else { $null }
+    $packageId = Get-CaCProperty -InputObject $remote -Name 'packageId'
+    $bundleId = Get-CaCProperty -InputObject $remote -Name 'bundleId'
+    $key = if ($packageId) { $packageId } elseif ($bundleId) { $bundleId } else { $null }
     $configured = if ($key) { $configuredByPackageOrBundle[$key] } else { $null }
     $desiredType = if ($configured) { $configured.payload.'@odata.type' } else { $null }
-    $actualType = $remote.'@odata.type'
+    $actualType = Get-CaCProperty -InputObject $remote -Name '@odata.type'
 
     [pscustomobject]@{
-        Id               = $remote.id
-        DisplayName      = $remote.displayName
+        Id               = Get-CaCProperty -InputObject $remote -Name 'id'
+        DisplayName      = Get-CaCProperty -InputObject $remote -Name 'displayName'
         PackageOrBundle  = $key
         ActualType       = $actualType
         ConfiguredType   = $desiredType
         TypeMismatch     = [bool]($desiredType -and $actualType -ne $desiredType)
-        PublishingState  = $remote.publishingState
+        PublishingState  = Get-CaCProperty -InputObject $remote -Name 'publishingState'
     }
 }
 
