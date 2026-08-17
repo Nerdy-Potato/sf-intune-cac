@@ -117,11 +117,17 @@ Describe 'Workflow trigger and permission safety' {
         $script:PlanWorkflow | Should -Match "github\.event_name\s*==\s*'workflow_dispatch'"
     }
 
-    It 'keeps the plan workflow permissions explicit and scoped to its outputs' {
+    It 'uses the pull request review API with explicit scoped permissions' {
         $script:PlanWorkflow | Should -Match '(?m)^\s*contents:\s*read\s*$'
         $script:PlanWorkflow | Should -Match '(?m)^\s*id-token:\s*write\s*$'
-        $script:PlanWorkflow | Should -Match '(?m)^\s*issues:\s*write\s*$'
-        $script:PlanWorkflow | Should -Not -Match '(?m)^\s*pull-requests:\s*write\s*$'
+        $script:PlanWorkflow | Should -Match '(?m)^\s*pull-requests:\s*write\s*$'
+        $script:PlanWorkflow | Should -Not -Match '(?m)^\s*issues:\s*write\s*$'
+        $script:PlanWorkflow | Should -Match 'github\.rest\.pulls\.listReviews'
+        $script:PlanWorkflow | Should -Match 'github\.rest\.pulls\.createReview'
+        $script:PlanWorkflow | Should -Match 'github\.rest\.pulls\.updateReview'
+        $script:PlanWorkflow | Should -Match "event:\s*'COMMENT'"
+        $script:PlanWorkflow | Should -Not -Match 'github\.rest\.issues\.(listComments|createComment|updateComment)'
+        $script:PlanWorkflow | Should -Match 'Failed to publish the tenant plan'
     }
 
     It 'requires the production environment and defaults deletion approval to false' {
