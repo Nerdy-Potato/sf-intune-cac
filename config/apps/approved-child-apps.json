@@ -22,21 +22,6 @@
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
-      "id": "android-authenticator",
-      "platform": "android",
-      "source": "managedGooglePlay",
-      "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
-        "displayName": "Microsoft Authenticator",
-        "description": "Required Entra device registration and authentication client. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation",
-        "packageId": "com.azure.authenticator",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.azure.authenticator",
-        "minimumSupportedOperatingSystem": { "v8_0": true }
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
-    },
-    {
       "id": "android-m365-copilot",
       "platform": "android",
       "source": "managedGooglePlay",
@@ -188,22 +173,6 @@
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
-      "id": "ios-authenticator",
-      "platform": "ios",
-      "source": "iosStore",
-      "payload": {
-        "@odata.type": "#microsoft.graph.iosStoreApp",
-        "displayName": "Microsoft Authenticator",
-        "description": "Required Entra device registration and authentication client. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation",
-        "bundleId": "com.microsoft.azureauthenticator",
-        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-authenticator/id983156458",
-        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
-        "minimumSupportedOperatingSystem": { "v16_0": true }
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
-    },
-    {
       "id": "ios-m365-copilot",
       "platform": "ios",
       "source": "iosStore",
@@ -346,30 +315,6 @@
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
-    },
-    {
-      "id": "windows-m365-apps",
-      "platform": "windows",
-      "source": "existing",
-      "payload": {
-        "@odata.type": "#microsoft.graph.officeSuiteApp",
-        "displayName": "Microsoft 365 Apps for Windows",
-        "description": "Approved Word, Excel, PowerPoint, Outlook, OneNote, Teams and OneDrive suite. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation"
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
-    },
-    {
-      "id": "windows-gsa-client",
-      "platform": "windows",
-      "source": "existing",
-      "payload": {
-        "@odata.type": "#microsoft.graph.win32LobApp",
-        "displayName": "Global Secure Access Client",
-        "description": "Required Global Secure Access client package downloaded from the tenant portal. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation"
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     }
   ]
 }

@@ -56,7 +56,7 @@ Describe 'Repository configuration' {
         $script:Config.Tenant.adoption.oneTime | Should -BeTrue
         $script:Config.Tenant.adoption.enabled | Should -BeTrue
         $script:Config.Tenant.adoption.groups.id | Should -Be 'sg-autopilot-device-preparation-child'
-        @($script:Config.Tenant.adoption.apps.id) | Should -Be @('android-authenticator', 'ios-authenticator')
+        @($script:Config.Tenant.adoption.apps | ForEach-Object id) | Should -Be @()
     }
 
     It 'defines one manually managed device group for each age tier' {
@@ -108,6 +108,8 @@ Describe 'Repository configuration' {
             $app.assignments.group | Should -Be @('sg-tier-child')
         }
 
+        $script:Config.Apps.id | Should -Not -Contain 'android-authenticator'
+        $script:Config.Apps.id | Should -Not -Contain 'ios-authenticator'
         ($script:Config.Apps | Where-Object id -in @('android-defender', 'ios-defender')).assignments.intent |
             Should -Be @('required', 'required')
     }

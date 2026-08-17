@@ -18,12 +18,26 @@ creating a duplicate.
 
 ### One-time adoption cleanup
 
-The first plan may contain narrowly scoped `Adopt` rows for the Autopilot preparation group and the
-configured Microsoft Authenticator apps. Confirm the exact display name, group shape, app Graph type,
-and package/bundle identity before approval. After a successful apply, verify the managed marker and
-that existing membership/assignments remain intact, then remove `adoption` from `config/tenant.json`
-through a reviewed pull request. A mismatch remains blocked; never replace this section with a
-global unmanaged-object bypass.
+The first plan may contain a narrowly scoped `Adopt` row for the Autopilot preparation group.
+Confirm the exact display name and group shape before approval. After a successful apply, verify the
+managed marker and that existing membership remains intact, then remove `adoption` from
+`config/tenant.json` through a reviewed pull request. A mismatch remains blocked; never replace this
+section with a global unmanaged-object bypass.
+
+### Solo-maintainer recovery deploy
+
+If the repository's sole maintainer has a reviewed commit on `main` but GitHub cannot accept a
+self-approval review, use `./scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1`. It looks up the most
+recent successful `plan.yml` run for the reviewed commit and dispatches `deploy.yml` in the
+repository's documented `workflow_dispatch` recovery mode.
+
+This does **not** bypass plan quality or environment protection. The reviewed plan still has to be
+`Ready`, the deploy workflow still verifies the reviewed SHA and plan artifact lineage, and the
+`production` environment reviewer gate still has to approve the write job.
+
+```powershell
+./scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1 -CommitSha <reviewed-pr-head-sha>
+```
 
 Deploy never regenerates a live plan with the write credential. Apply consumes only the reviewed
 artifact, whose commit and deterministic action hash are verified before any tenant connection is
