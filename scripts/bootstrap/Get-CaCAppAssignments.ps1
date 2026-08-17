@@ -60,7 +60,9 @@ foreach ($rawAppId in $AppId) {
         throw 'AppId values may not be empty.'
     }
 
-    $app = & $graphInvoker -Method 'GET' -Uri "deviceAppManagement/mobileApps/${normalizedAppId}?`$select=id,displayName,`$odata.type,publishingState"
+    # @odata.type is not a selectable field via $select; Graph always returns it for
+    # polymorphic types like mobileApps, so it comes back regardless.
+    $app = & $graphInvoker -Method 'GET' -Uri "deviceAppManagement/mobileApps/${normalizedAppId}?`$select=id,displayName,publishingState"
     $assignmentResponse = & $graphInvoker -Method 'GET' -Uri "deviceAppManagement/mobileApps/${normalizedAppId}/assignments"
 
     $assignmentSummaries = @()
