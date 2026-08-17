@@ -609,9 +609,115 @@ Describe 'Invoke-CaCPlan' {
         ($results | Where-Object Action -EQ 'Assign app').Status | Should -Be 'Applied'
         @($calls | Where-Object {
                 $_.Method -eq 'GET' -and $_.Uri -eq 'deviceAppManagement/mobileApps/created-app'
-            }).Count | Should -Be 6
+            }).Count | Should -Be 7
         ($calls | Select-Object -Last 1 | ForEach-Object { "$($_.Method) $($_.Uri)" }) |
             Should -Be 'POST deviceAppManagement/mobileApps/created-app/assign'
+    }
+
+    It 'uses a shared publish polling budget across multiple app assignments' {
+        $apps = @(
+            [pscustomobject]@{
+                id          = 'android-edge'
+                payload      = @{
+                    '@odata.type' = '#microsoft.graph.managedAndroidStoreApp'
+                    displayName   = 'Microsoft Edge'
+                }
+                assignments = @()
+            },
+            [pscustomobject]@{
+                id          = 'android-word'
+                payload      = @{
+                    '@odata.type' = '#microsoft.graph.managedAndroidStoreApp'
+                    displayName   = 'Microsoft Word'
+                }
+                assignments = @()
+            },
+            [pscustomobject]@{
+                id          = 'android-portal'
+                payload      = @{
+                    '@odata.type' = '#microsoft.graph.managedAndroidStoreApp'
+                    displayName   = 'Company Portal'
+                }
+                assignments = @()
+            }
+        )
+
+        $plan = foreach ($app in $apps) {
+            [pscustomobject]@{
+                Kind    = 'App'
+                Action  = 'Create'
+                Target  = $app.payload.displayName
+                Details = @()
+                Data    = $app
+            }
+            [pscustomobject]@{
+                Kind    = 'AppAssignment'
+                Action  = 'Update'
+                Target  = $app.payload.displayName
+                Details = @('required sg-tier-child')
+                Data    = [pscustomobject]@{ App = $app }
+            }
+        }
+
+        $calls = [System.Collections.Generic.List[object]]::new()
+        $createdIds = @{
+            'Microsoft Edge'  = 'created-edge'
+            'Microsoft Word'  = 'created-word'
+            'Company Portal'  = 'created-portal'
+        }
+        $publishingStates = @{
+            'created-edge'   = [System.Collections.Generic.Queue[string]]::new()
+            'created-word'   = [System.Collections.Generic.Queue[string]]::new()
+            'created-portal' = [System.Collections.Generic.Queue[string]]::new()
+        }
+        @('processing', 'published') | ForEach-Object { $publishingStates['created-edge'].Enqueue($_) }
+        @('processing', 'processing', 'processing', 'processing', 'processing', 'processing', 'processing') |
+            ForEach-Object { $publishingStates['created-word'].Enqueue($_) }
+        @('published') | ForEach-Object { $publishingStates['created-portal'].Enqueue($_) }
+
+        $invoker = {
+            param($Method, $Uri, $Body)
+
+            $calls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body })
+
+            if ($Method -eq 'POST' -and $Uri -eq 'deviceAppManagement/mobileApps') {
+                return [pscustomobject]@{ id = $createdIds[$Body.displayName] }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -like 'deviceAppManagement/mobileApps/*') {
+                $appId = ($Uri -split '/')[-1]
+                return [pscustomobject]@{
+                    id              = $appId
+                    publishingState = $publishingStates[$appId].Dequeue()
+                }
+            }
+
+            if ($Method -eq 'POST' -and $Uri -like 'deviceAppManagement/mobileApps/*/assign') {
+                return [pscustomobject]@{}
+            }
+
+            throw "Unexpected call: $Method $Uri"
+        }.GetNewClosure()
+
+        Mock Start-Sleep {} -ModuleName IntuneCaC
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Assign app').Status | Should -Be @('Applied', 'Applied', 'Applied')
+        @($calls | Where-Object {
+                $_.Method -eq 'GET' -and $_.Uri -eq 'deviceAppManagement/mobileApps/created-edge'
+            }).Count | Should -Be 2
+        @($calls | Where-Object {
+                $_.Method -eq 'GET' -and $_.Uri -eq 'deviceAppManagement/mobileApps/created-word'
+            }).Count | Should -Be 7
+        @($calls | Where-Object {
+                $_.Method -eq 'GET' -and $_.Uri -eq 'deviceAppManagement/mobileApps/created-portal'
+            }).Count | Should -Be 1
+        @($calls | Where-Object {
+                $_.Method -eq 'GET' -and $_.Uri -like 'deviceAppManagement/mobileApps/created-*'
+            }).Count | Should -Be 10
+        @($calls | Where-Object {
+                $_.Method -eq 'POST' -and $_.Uri -like 'deviceAppManagement/mobileApps/*/assign'
+            }).Count | Should -Be 3
     }
 
     It 'preserves app assignments outside the child app catalog scope' {
