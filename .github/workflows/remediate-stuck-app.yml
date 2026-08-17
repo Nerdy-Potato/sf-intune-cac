@@ -1,0 +1,66 @@
+name: Remediate stuck Intune app objects
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_ids:
+        description: 'Comma-separated deviceAppManagement/mobileApps object ids to delete'
+        type: string
+        required: true
+      confirm:
+        description: 'Explicitly confirm deletion of the listed stuck app objects'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: remediate-stuck-app
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    name: Delete stuck Intune app objects
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require explicit confirmation
+        shell: pwsh
+        run: |
+          if ('${{ inputs.confirm }}' -ne 'true') {
+            throw 'Stuck app remediation requires confirm=true.'
+          }
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Delete stuck app objects
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          Set-StrictMode -Version Latest
+          $appIds = @(
+            '${{ inputs.app_ids }}'.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries) |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+
+          if (-not $appIds) {
+            throw 'No app ids were provided. Pass a comma-separated app_ids input.'
+          }
+
+          ./scripts/bootstrap/Remove-CaCStuckApp.ps1 -AppId $appIds

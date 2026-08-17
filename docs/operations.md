@@ -43,6 +43,27 @@ Deploy never regenerates a live plan with the write credential. Apply consumes o
 artifact, whose commit and deterministic action hash are verified before any tenant connection is
 opened.
 
+### Stuck Intune app remediation
+
+If a newly created Intune store app remains in Microsoft Graph `publishingState: processing` for
+well over an hour, treat it as a backend sync failure rather than normal publish latency.
+Microsoft's guidance says store apps normally publish within a few minutes; when an app object stays
+stuck, the recommended remediation is to delete that Graph object and let the deployment recreate
+it.
+
+Use the manual-only `remediate-stuck-app.yml` workflow for this one-off cleanup. It uses the same
+OIDC-backed apply identity pattern as the deployment workflow, requires explicit confirmation, and
+never runs on push or pull request events.
+
+Only use this when the stuck app has no successful assignments yet; otherwise deleting it would
+break the existing assignment lineage.
+
+```powershell
+gh workflow run remediate-stuck-app.yml `
+  -f app_ids=0016c1fd-2abc-4b5c-8d37-a6da9ba650d5,2c3b96cc-b476-4d12-877d-1fff8dfa28f5 `
+  -f confirm=true
+```
+
 Run the same checks locally before pushing:
 
 ```powershell
