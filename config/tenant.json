@@ -16,6 +16,13 @@
         "securityEnabled": true,
         "mailEnabled": false,
         "groupTypes": []
+      },
+      {
+        "id": "sg-nuclear-family",
+        "displayName": "NuclearFamily-SG",
+        "securityEnabled": true,
+        "mailEnabled": false,
+        "groupTypes": []
       }
     ],
     "apps": [
@@ -78,6 +85,36 @@
         "displayName": "Microsoft Edge",
         "odataType": "#microsoft.graph.androidManagedStoreApp",
         "identity": { "kind": "packageId", "value": "com.microsoft.emmx" }
+      },
+      {
+        "id": "android-spotify-kids",
+        "displayName": "Spotify Kids",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.spotify.kids" }
+      },
+      {
+        "id": "android-moonlight",
+        "displayName": "Moonlight Game Streaming",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.limelight" }
+      },
+      {
+        "id": "android-steam-link",
+        "displayName": "Steam Link",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.valvesoftware.steamlink" }
+      },
+      {
+        "id": "android-windows-app",
+        "displayName": "Windows App",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.rdc.androidx" }
+      },
+      {
+        "id": "android-xbox",
+        "displayName": "XBOX",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.xboxone.smartglass" }
       }
     ]
   },

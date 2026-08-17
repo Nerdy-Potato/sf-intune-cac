@@ -72,30 +72,34 @@ function Test-CaCConfiguration {
                 'The adoption section must be explicitly marked oneTime=true.'
         }
 
-        $allowedGroupId = 'sg-autopilot-device-preparation-child'
-        $allowedGroupName = 'CaC-Autopilot-DevicePreparation-Child'
+        # Keep in sync with the guard list in src/IntuneCaC/Private/Get-CaCAdoption.ps1.
+        $allowedGroupIds = @('sg-autopilot-device-preparation-child', 'sg-nuclear-family')
         foreach ($spec in @(Get-CaCProperty -InputObject $adoption -Name 'groups' | Where-Object { $_ })) {
             $specId = Get-CaCProperty -InputObject $spec -Name 'id'
             $group = if ($groupsById.ContainsKey($specId)) { $groupsById[$specId] } else { $null }
-            if ($specId -ne $allowedGroupId) {
+            if ($specId -notin $allowedGroupIds) {
                 Add-Finding -Severity 'Error' -Rule 'adoption/group-scope' -Target ([string] $specId) -Message `
-                    ("Only '{0}' may be adopted by display name." -f $allowedGroupId)
+                    ("Only the configured one-time adoption groups may be adopted: {0}." -f ($allowedGroupIds -join ', '))
                 continue
             }
 
             if (-not $group) {
                 Add-Finding -Severity 'Error' -Rule 'adoption/group-config' -Target $specId -Message `
-                    'The configured Autopilot adoption group must exist in identity/groups.json.'
+                    'The configured adoption group must exist in identity/groups.json.'
                 continue
             }
 
-            if ((Get-CaCProperty -InputObject $spec -Name 'displayName') -ne $allowedGroupName -or
-                $group.displayName -ne $allowedGroupName -or
+            # Intentionally do NOT require a hardcoded display name here: the whole point of
+            # adoption is bridging a live remote object whose display name was set outside this
+            # repo. What must line up is that the spec's own displayName matches its own catalog
+            # group entry (self-consistency), and that the shape is a plain assigned security
+            # group (never mail-enabled or dynamic/unified), which this repo never wants to adopt.
+            if ((Get-CaCProperty -InputObject $spec -Name 'displayName') -ne $group.displayName -or
                 (Get-CaCProperty -InputObject $spec -Name 'securityEnabled') -ne $true -or
                 (Get-CaCProperty -InputObject $spec -Name 'mailEnabled') -ne $false -or
                 @(Get-CaCProperty -InputObject $spec -Name 'groupTypes').Count -ne 0) {
                 Add-Finding -Severity 'Error' -Rule 'adoption/group-shape' -Target $specId -Message `
-                    'Autopilot adoption requires the exact configured display name and an assigned security group (securityEnabled=true, mailEnabled=false, groupTypes=[]).'
+                    'Adoption requires the spec display name to match its own catalog group entry and an assigned security group (securityEnabled=true, mailEnabled=false, groupTypes=[]).'
             }
         }
 
@@ -104,7 +108,9 @@ function Test-CaCConfiguration {
             'android-authenticator', 'ios-authenticator',
             'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
             'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
-            'android-onedrive', 'android-edge'
+            'android-onedrive', 'android-edge',
+            'android-spotify-kids', 'android-moonlight', 'android-steam-link',
+            'android-windows-app', 'android-xbox'
         )
         foreach ($spec in @(Get-CaCProperty -InputObject $adoption -Name 'apps' | Where-Object { $_ })) {
             $specId = Get-CaCProperty -InputObject $spec -Name 'id'
