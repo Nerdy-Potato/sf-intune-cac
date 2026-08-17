@@ -494,6 +494,126 @@ Describe 'Invoke-CaCPlan' {
         @($applyState.Calls | Where-Object Method -NE 'GET') | Should -Not -BeNullOrEmpty
     }
 
+    It 'waits for a store app to reach the published state before assigning it' {
+        $app = [pscustomobject]@{
+            id          = 'android-edge'
+            payload      = @{
+                '@odata.type' = '#microsoft.graph.managedAndroidStoreApp'
+                displayName   = 'Microsoft Edge'
+            }
+            assignments = @()
+        }
+        $plan = @(
+            [pscustomobject]@{
+                Kind    = 'App'
+                Action  = 'Create'
+                Target  = $app.payload.displayName
+                Details = @()
+                Data    = $app
+            }
+            [pscustomobject]@{
+                Kind    = 'AppAssignment'
+                Action  = 'Update'
+                Target  = $app.payload.displayName
+                Details = @('required sg-tier-child')
+                Data    = [pscustomobject]@{ App = $app }
+            }
+        )
+        $calls = [System.Collections.Generic.List[object]]::new()
+        $publishingStates = [System.Collections.Generic.Queue[string]]::new()
+        @('processing', 'published') | ForEach-Object { $publishingStates.Enqueue($_) }
+        $invoker = {
+            param($Method, $Uri, $Body)
+
+            $calls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body })
+
+            switch ("$Method $Uri") {
+                'POST deviceAppManagement/mobileApps' { return [pscustomobject]@{ id = 'created-app' } }
+                'POST deviceAppManagement/mobileApps/created-app/assign' { return [pscustomobject]@{} }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -eq 'deviceAppManagement/mobileApps/created-app') {
+                return [pscustomobject]@{
+                    id              = 'created-app'
+                    publishingState = $publishingStates.Dequeue()
+                }
+            }
+
+            throw "Unexpected call: $Method $Uri"
+        }.GetNewClosure()
+
+        Mock Start-Sleep {} -ModuleName IntuneCaC
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Assign app').Status | Should -Be 'Applied'
+        @($calls | Where-Object {
+                $_.Method -eq 'GET' -and $_.Uri -eq 'deviceAppManagement/mobileApps/created-app'
+            }).Count | Should -Be 2
+        ($calls | ForEach-Object { "$($_.Method) $($_.Uri)" }) | Should -Be @(
+            'POST deviceAppManagement/mobileApps'
+            'GET deviceAppManagement/mobileApps/created-app'
+            'GET deviceAppManagement/mobileApps/created-app'
+            'POST deviceAppManagement/mobileApps/created-app/assign'
+        )
+    }
+
+    It 'proceeds to assign an app after the publish wait budget is exhausted' {
+        $app = [pscustomobject]@{
+            id          = 'android-word'
+            payload      = @{
+                '@odata.type' = '#microsoft.graph.managedAndroidStoreApp'
+                displayName   = 'Microsoft Word'
+            }
+            assignments = @()
+        }
+        $plan = @(
+            [pscustomobject]@{
+                Kind    = 'App'
+                Action  = 'Create'
+                Target  = $app.payload.displayName
+                Details = @()
+                Data    = $app
+            }
+            [pscustomobject]@{
+                Kind    = 'AppAssignment'
+                Action  = 'Update'
+                Target  = $app.payload.displayName
+                Details = @('required sg-tier-child')
+                Data    = [pscustomobject]@{ App = $app }
+            }
+        )
+        $calls = [System.Collections.Generic.List[object]]::new()
+        $invoker = {
+            param($Method, $Uri, $Body)
+
+            $calls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body })
+
+            switch ("$Method $Uri") {
+                'POST deviceAppManagement/mobileApps' { return [pscustomobject]@{ id = 'created-app' } }
+                'POST deviceAppManagement/mobileApps/created-app/assign' { return [pscustomobject]@{} }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -eq 'deviceAppManagement/mobileApps/created-app') {
+                return [pscustomobject]@{
+                    id              = 'created-app'
+                    publishingState = 'processing'
+                }
+            }
+
+            throw "Unexpected call: $Method $Uri"
+        }.GetNewClosure()
+
+        Mock Start-Sleep {} -ModuleName IntuneCaC
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Assign app').Status | Should -Be 'Applied'
+        @($calls | Where-Object {
+                $_.Method -eq 'GET' -and $_.Uri -eq 'deviceAppManagement/mobileApps/created-app'
+            }).Count | Should -Be 6
+        ($calls | Select-Object -Last 1 | ForEach-Object { "$($_.Method) $($_.Uri)" }) |
+            Should -Be 'POST deviceAppManagement/mobileApps/created-app/assign'
+    }
+
     It 'preserves app assignments outside the child app catalog scope' {
         $state = New-FakeTenant -InSync
         $app = $state.Apps | Where-Object {
@@ -621,6 +741,22 @@ Describe 'Invoke-CaCPlan' {
 
         ($results | Where-Object Action -EQ 'Update policy').Status | Should -Be 'Failed'
         @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'fails a policy update cleanly when the reviewed action data is missing' {
+        $plan = @([pscustomobject]@{
+                Kind    = 'Policy'
+                Action  = 'Update'
+                Target  = 'CaC - iOS - Device Restrictions (Teen)'
+                Details = @('payload drift')
+            })
+
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+            -GraphInvoker { param($Method, $Uri, $Body) throw "Unexpected call: $Method $Uri" } -Confirm:$false
+
+        ($results | Where-Object Action -EQ 'Update policy').Status | Should -Be 'Failed'
+        ($results | Where-Object Action -EQ 'Update policy').Message |
+            Should -Be 'policy data is missing from the reviewed plan'
     }
 
     It 'fails a dependent assignment when its policy was skipped' {

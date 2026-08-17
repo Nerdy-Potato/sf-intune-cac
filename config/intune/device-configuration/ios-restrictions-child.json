@@ -19,7 +19,7 @@
     "safariBlockPopups": true,
     "safariRequireFraudWarning": true,
     "safariBlockAutofill": true,
-    "safariCookieSettings": "blockThirdPartyCookies",
+    "safariCookieSettings": "allowFromWebsitesVisited",
     "iTunesBlockExplicitContent": true,
     "ratingApps": "unitedStatesAppsAgesAbove12",
     "ratingMovies": "unitedStatesMoviesPg",
