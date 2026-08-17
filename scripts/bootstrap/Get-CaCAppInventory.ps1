@@ -58,11 +58,22 @@ $graphInvoker = $module.NewBoundScriptBlock({
         Invoke-CaCGraphRequest -Method $Method -Uri $Uri -Body $Body
     })
 
+# Get-CaCProperty is a private module function; bind it to the module scope the same way
+# graphInvoker is bound above, rather than duplicating its hashtable/PSCustomObject logic here.
+$getProperty = $module.NewBoundScriptBlock({
+        param(
+            $InputObject,
+            [Parameter(Mandatory)][string] $Name
+        )
+
+        Get-CaCProperty -InputObject $InputObject -Name $Name
+    })
+
 $configuration = Get-CaCConfiguration -Path (Join-Path $repoRoot 'config')
 $configuredByPackageOrBundle = @{}
 foreach ($app in $configuration.Apps) {
-    $configuredPackageId = Get-CaCProperty -InputObject $app.payload -Name 'packageId'
-    $configuredBundleId = Get-CaCProperty -InputObject $app.payload -Name 'bundleId'
+    $configuredPackageId = & $getProperty $app.payload 'packageId'
+    $configuredBundleId = & $getProperty $app.payload 'bundleId'
     $key = if ($configuredPackageId) { $configuredPackageId } elseif ($configuredBundleId) { $configuredBundleId } else { $null }
     if ($key) { $configuredByPackageOrBundle[$key] = $app }
 }
@@ -70,21 +81,21 @@ foreach ($app in $configuration.Apps) {
 $remoteApps = @((& $graphInvoker 'GET' 'deviceAppManagement/mobileApps' $null).value | Where-Object { $_ })
 
 $rows = foreach ($remote in $remoteApps) {
-    $packageId = Get-CaCProperty -InputObject $remote -Name 'packageId'
-    $bundleId = Get-CaCProperty -InputObject $remote -Name 'bundleId'
+    $packageId = & $getProperty $remote 'packageId'
+    $bundleId = & $getProperty $remote 'bundleId'
     $key = if ($packageId) { $packageId } elseif ($bundleId) { $bundleId } else { $null }
     $configured = if ($key) { $configuredByPackageOrBundle[$key] } else { $null }
     $desiredType = if ($configured) { $configured.payload.'@odata.type' } else { $null }
-    $actualType = Get-CaCProperty -InputObject $remote -Name '@odata.type'
+    $actualType = & $getProperty $remote '@odata.type'
 
     [pscustomobject]@{
-        Id               = Get-CaCProperty -InputObject $remote -Name 'id'
-        DisplayName      = Get-CaCProperty -InputObject $remote -Name 'displayName'
+        Id               = & $getProperty $remote 'id'
+        DisplayName      = & $getProperty $remote 'displayName'
         PackageOrBundle  = $key
         ActualType       = $actualType
         ConfiguredType   = $desiredType
         TypeMismatch     = [bool]($desiredType -and $actualType -ne $desiredType)
-        PublishingState  = Get-CaCProperty -InputObject $remote -Name 'publishingState'
+        PublishingState  = & $getProperty $remote 'publishingState'
     }
 }
 
