@@ -18,7 +18,68 @@
         "groupTypes": []
       }
     ],
-    "apps": []
+    "apps": [
+      {
+        "id": "android-defender",
+        "displayName": "Microsoft Defender: Antivirus",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.scmx" }
+      },
+      {
+        "id": "android-m365-copilot",
+        "displayName": "Microsoft 365 Copilot",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.office.officehubrow" }
+      },
+      {
+        "id": "android-word",
+        "displayName": "Microsoft Word: Edit Documents",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.office.word" }
+      },
+      {
+        "id": "android-excel",
+        "displayName": "Microsoft Excel: Spreadsheets",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.office.excel" }
+      },
+      {
+        "id": "android-powerpoint",
+        "displayName": "Microsoft PowerPoint",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.office.powerpoint" }
+      },
+      {
+        "id": "android-onenote",
+        "displayName": "Microsoft OneNote: Save Notes",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.office.onenote" }
+      },
+      {
+        "id": "android-outlook",
+        "displayName": "Microsoft Outlook",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.office.outlook" }
+      },
+      {
+        "id": "android-teams",
+        "displayName": "Microsoft Teams",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.teams" }
+      },
+      {
+        "id": "android-onedrive",
+        "displayName": "Microsoft OneDrive",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.skydrive" }
+      },
+      {
+        "id": "android-edge",
+        "displayName": "Microsoft Edge",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.microsoft.emmx" }
+      }
+    ]
   },
   "safety": {
     "forbidAllUsersAssignment": true,

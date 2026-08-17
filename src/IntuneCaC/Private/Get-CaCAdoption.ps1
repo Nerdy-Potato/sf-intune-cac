@@ -11,8 +11,14 @@ function Get-CaCAdoptionSpec {
         return $null
     }
 
+    $adoptableAppIds = @(
+        'android-authenticator', 'ios-authenticator',
+        'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
+        'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
+        'android-onedrive', 'android-edge'
+    )
     if (($Kind -eq 'Group' -and $Id -ne 'sg-autopilot-device-preparation-child') -or
-        ($Kind -eq 'App' -and $Id -notin @('android-authenticator', 'ios-authenticator'))) {
+        ($Kind -eq 'App' -and $Id -notin $adoptableAppIds)) {
         return $null
     }
 
@@ -61,37 +67,23 @@ function Test-CaCAdoptionAppIdentity {
         [Parameter(Mandatory)] $Spec
     )
 
+    # Fully data-driven against the configured adoption spec (config/tenant.json's
+    # adoption.apps entries) - no per-app hardcoding here. The spec's own
+    # displayName/odataType/identity fields are the source of truth, matched
+    # against the immutable identity of the live remote object.
     $identity = Get-CaCProperty -InputObject $Spec -Name 'identity'
     $identityKind = Get-CaCProperty -InputObject $identity -Name 'kind'
     $identityValue = Get-CaCProperty -InputObject $identity -Name 'value'
-    $specId = Get-CaCProperty -InputObject $Spec -Name 'id'
-    $expected = @{
-        'android-authenticator' = @{
-            ODataType = '#microsoft.graph.managedAndroidStoreApp'
-            Kind      = 'packageId'
-            Value     = 'com.azure.authenticator'
-        }
-        'ios-authenticator' = @{
-            ODataType = '#microsoft.graph.iosStoreApp'
-            Kind      = 'bundleId'
-            Value     = 'com.microsoft.azureauthenticator'
-        }
-    }
+    $specODataType = Get-CaCProperty -InputObject $Spec -Name 'odataType'
+    $specDisplayName = Get-CaCProperty -InputObject $Spec -Name 'displayName'
 
-    if (-not $expected.ContainsKey($specId) -or
-        $identityKind -ne $expected[$specId].Kind -or
-        $identityValue -ne $expected[$specId].Value -or
-        (Get-CaCProperty -InputObject $Spec -Name 'odataType') -ne $expected[$specId].ODataType) {
+    if (-not $identityKind -or -not $identityValue -or -not $specODataType -or -not $specDisplayName) {
         return $false
     }
 
     return (
-        (Get-CaCProperty -InputObject $Object -Name 'displayName') -eq
-            'Microsoft Authenticator' -and
-        (Get-CaCProperty -InputObject $Spec -Name 'displayName') -eq
-            'Microsoft Authenticator' -and
-        (Get-CaCProperty -InputObject $Object -Name '@odata.type') -eq
-            (Get-CaCProperty -InputObject $Spec -Name 'odataType') -and
+        (Get-CaCProperty -InputObject $Object -Name 'displayName') -eq $specDisplayName -and
+        (Get-CaCProperty -InputObject $Object -Name '@odata.type') -eq $specODataType -and
         (Get-CaCProperty -InputObject $Object -Name $identityKind) -eq $identityValue
     )
 }

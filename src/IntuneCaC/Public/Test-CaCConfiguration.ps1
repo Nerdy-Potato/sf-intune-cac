@@ -99,19 +99,25 @@ function Test-CaCConfiguration {
             }
         }
 
-        $allowedAppIds = @('android-authenticator', 'ios-authenticator')
+        # Keep in sync with the guard list in src/IntuneCaC/Private/Get-CaCAdoption.ps1.
+        $allowedAppIds = @(
+            'android-authenticator', 'ios-authenticator',
+            'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
+            'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
+            'android-onedrive', 'android-edge'
+        )
         foreach ($spec in @(Get-CaCProperty -InputObject $adoption -Name 'apps' | Where-Object { $_ })) {
             $specId = Get-CaCProperty -InputObject $spec -Name 'id'
             if ($specId -notin $allowedAppIds) {
                 Add-Finding -Severity 'Error' -Rule 'adoption/app-scope' -Target ([string] $specId) -Message `
-                    ("Only the configured Microsoft Authenticator apps may be adopted: {0}." -f ($allowedAppIds -join ', '))
+                    ("Only the configured one-time adoption apps may be adopted: {0}." -f ($allowedAppIds -join ', '))
                 continue
             }
 
             $app = if ($appsById.ContainsKey($specId)) { $appsById[$specId] } else { $null }
             if (-not $app) {
                 Add-Finding -Severity 'Error' -Rule 'adoption/app-config' -Target $specId -Message `
-                    'The configured Microsoft Authenticator adoption app must exist in the approved app catalog.'
+                    'The configured adoption app must exist in the approved app catalog.'
                 continue
             }
 
@@ -124,13 +130,18 @@ function Test-CaCConfiguration {
             else {
                 $null
             }
-            if ((Get-CaCProperty -InputObject $spec -Name 'displayName') -ne 'Microsoft Authenticator' -or
-                (Get-CaCProperty -InputObject $spec -Name 'displayName') -ne $app.payload.displayName -or
-                (Get-CaCProperty -InputObject $spec -Name 'odataType') -ne $app.payload.'@odata.type' -or
-                $identityKind -notin @('packageId', 'bundleId') -or
+            # Intentionally do NOT require spec.displayName/odataType to equal the catalog's
+            # own payload.displayName/@odata.type: the whole point of adoption is bridging a
+            # live remote object whose display name and (legacy/beta) @odata.type were set by
+            # Google Play sync and legitimately differ from what this repo declares (see the
+            # documented @odata.type gap in docs/bootstrap.md). What must line up is identity:
+            # the adoption spec's packageId/bundleId has to match the one this app's own
+            # catalog entry declares, so adoption can only ever claim the object this specific
+            # config entry is meant to own.
+            if ($identityKind -notin @('packageId', 'bundleId') -or
                 $identityValue -ne $configuredIdentity) {
                 Add-Finding -Severity 'Error' -Rule 'adoption/app-identity' -Target $specId -Message `
-                    'Authenticator adoption requires the exact configured display name, Graph type, and existing immutable packageId or bundleId.'
+                    'Adoption requires an identity (packageId or bundleId) matching this app''s own catalog entry.'
             }
         }
     }
