@@ -55,7 +55,9 @@ Describe 'Repository configuration' {
     It 'keeps adoption explicit, one-time, and scoped to the configured bootstrap objects' {
         $script:Config.Tenant.adoption.oneTime | Should -BeTrue
         $script:Config.Tenant.adoption.enabled | Should -BeTrue
-        $script:Config.Tenant.adoption.groups.id | Should -Be 'sg-autopilot-device-preparation-child'
+        $expectedGroupIds = @('sg-autopilot-device-preparation-child', 'sg-nuclear-family')
+        (@($script:Config.Tenant.adoption.groups | ForEach-Object id) | Sort-Object) |
+            Should -Be (@($expectedGroupIds) | Sort-Object)
 
         $expectedAppIds = @(
             'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
@@ -119,11 +121,12 @@ Describe 'Repository configuration' {
         }
     }
 
-    It 'keeps the child app catalog explicit and scoped only to the child tier' {
+    It 'keeps the app catalog explicit and scoped only to approved assignment groups' {
         $script:Config.Apps.Count | Should -BeGreaterThan 0
+        $allowedAssignmentGroups = @('sg-tier-child', 'sg-nuclear-family')
         foreach ($app in $script:Config.Apps) {
-            if (@($app.assignments).Count -gt 0) {
-                $app.assignments.group | Should -Be @('sg-tier-child')
+            foreach ($assignment in $app.assignments) {
+                $assignment.group | Should -BeIn $allowedAssignmentGroups
             }
         }
 

@@ -11,13 +11,17 @@ function Get-CaCAdoptionSpec {
         return $null
     }
 
+    # Keep in sync with the guard lists in src/IntuneCaC/Public/Test-CaCConfiguration.ps1.
+    $adoptableGroupIds = @(
+        'sg-autopilot-device-preparation-child', 'sg-nuclear-family'
+    )
     $adoptableAppIds = @(
         'android-authenticator', 'ios-authenticator',
         'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
         'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
         'android-onedrive', 'android-edge'
     )
-    if (($Kind -eq 'Group' -and $Id -ne 'sg-autopilot-device-preparation-child') -or
+    if (($Kind -eq 'Group' -and $Id -notin $adoptableGroupIds) -or
         ($Kind -eq 'App' -and $Id -notin $adoptableAppIds)) {
         return $null
     }
@@ -37,8 +41,15 @@ function Test-CaCAdoptionGroupShape {
         [Parameter(Mandatory)] $Spec
     )
 
+    # Fully data-driven against the configured adoption spec (config/tenant.json's
+    # adoption.groups entries) - no per-group hardcoding here. The spec's own
+    # displayName/securityEnabled/mailEnabled/groupTypes fields are the source of
+    # truth, matched against the immutable shape of the live remote object.
     foreach ($property in @('displayName', 'securityEnabled', 'mailEnabled', 'groupTypes')) {
         if (-not (Test-CaCHasProperty -InputObject $Object -Name $property)) {
+            return $false
+        }
+        if (-not (Test-CaCHasProperty -InputObject $Spec -Name $property)) {
             return $false
         }
     }
@@ -47,11 +58,8 @@ function Test-CaCAdoptionGroupShape {
     $expectedTypes = @(Get-CaCProperty -InputObject $Spec -Name 'groupTypes')
 
     return (
-        (Get-CaCProperty -InputObject $Spec -Name 'id') -eq 'sg-autopilot-device-preparation-child' -and
         (Get-CaCProperty -InputObject $Object -Name 'displayName') -eq
             (Get-CaCProperty -InputObject $Spec -Name 'displayName') -and
-        (Get-CaCProperty -InputObject $Spec -Name 'displayName') -eq
-            'CaC-Autopilot-DevicePreparation-Child' -and
         [bool](Get-CaCProperty -InputObject $Object -Name 'securityEnabled') -eq
             [bool](Get-CaCProperty -InputObject $Spec -Name 'securityEnabled') -and
         [bool](Get-CaCProperty -InputObject $Object -Name 'mailEnabled') -eq

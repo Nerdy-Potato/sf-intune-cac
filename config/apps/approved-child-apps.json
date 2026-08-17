@@ -1,9 +1,15 @@
 {
   "$schema": "../../schemas/apps.schema.json",
   "comment": [
-    "This is the child-tier allowlist. Required security and Microsoft 365 clients install automatically;",
-    "other approved apps remain available in Company Portal but cannot be installed until declared here.",
-    "Android entries are added through the Managed Google Play connector configured in the tenant."
+    "This is the app catalog for the whole tenant, not just the child tier. Required security and",
+    "Microsoft 365 clients install automatically for the tier they target; other approved apps remain",
+    "available in Company Portal but cannot be installed until declared here.",
+    "Android entries are added through the Managed Google Play connector configured in the tenant.",
+    "Windows entries use source=existing: Microsoft Store (new)/winget-backed apps cannot be created",
+    "over Graph the way Managed Google Play and iOS Store apps can, so the app must be added once in",
+    "the Intune admin center (Apps > Windows > Add > Microsoft Store app (new), searching the exact",
+    "displayName below) before this repo can manage its assignment. Until then, deploy reports a",
+    "harmless 'Prerequisite' action instead of failing."
   ],
   "apps": [
     {
@@ -155,6 +161,81 @@
         "minimumSupportedOperatingSystem": { "v8_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+    },
+    {
+      "id": "android-spotify-kids",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Spotify Kids",
+        "description": "Approved Spotify Kids client. Managed by sf-intune-cac.",
+        "publisher": "Spotify AB",
+        "packageId": "com.spotify.kids",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.spotify.kids",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
+    },
+    {
+      "id": "android-moonlight",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Moonlight Game Streaming",
+        "description": "Approved Moonlight game streaming client. Managed by sf-intune-cac.",
+        "publisher": "Moonlight Game Streaming Project",
+        "packageId": "com.limelight",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.limelight",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
+    },
+    {
+      "id": "android-steam-link",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Steam Link",
+        "description": "Approved Steam Link game streaming client. Managed by sf-intune-cac.",
+        "publisher": "Valve Corporation",
+        "packageId": "com.valvesoftware.steamlink",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.valvesoftware.steamlink",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
+    },
+    {
+      "id": "android-windows-app",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Windows App",
+        "description": "Approved Windows App (Microsoft remote desktop/Windows 365 client). Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.rdc.androidx",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.rdc.androidx",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
+    },
+    {
+      "id": "android-xbox",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Xbox",
+        "description": "Approved Xbox companion/streaming client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "packageId": "com.microsoft.xboxone.smartglass",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.xboxone.smartglass",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
     },
     {
       "id": "ios-defender",
@@ -315,6 +396,122 @@
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
       "assignments": []
+    },
+    {
+      "id": "ios-spotify-kids",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Spotify Kids",
+        "description": "Approved Spotify Kids client. Managed by sf-intune-cac.",
+        "publisher": "Spotify AB",
+        "bundleId": "com.spotify.kids",
+        "appStoreUrl": "https://apps.apple.com/us/app/spotify-kids/id1470209570",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": []
+    },
+    {
+      "id": "ios-moonlight",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Moonlight Game Streaming",
+        "description": "Approved Moonlight game streaming client. Managed by sf-intune-cac.",
+        "publisher": "Moonlight Game Streaming Project",
+        "bundleId": "com.moonlight-stream.Moonlight",
+        "appStoreUrl": "https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": []
+    },
+    {
+      "id": "ios-steam-link",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Steam Link",
+        "description": "Approved Steam Link game streaming client. Managed by sf-intune-cac.",
+        "publisher": "Valve Corporation",
+        "bundleId": "com.valvesoftware.SteamLink17",
+        "appStoreUrl": "https://apps.apple.com/us/app/steam-link/id1246969117",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": []
+    },
+    {
+      "id": "ios-windows-app",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Windows App",
+        "description": "Approved Windows App (Microsoft remote desktop/Windows 365 client). Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.rdc.ios",
+        "appStoreUrl": "https://apps.apple.com/us/app/windows-app-mobile/id714464092",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": []
+    },
+    {
+      "id": "ios-xbox",
+      "platform": "ios",
+      "source": "iosStore",
+      "payload": {
+        "@odata.type": "#microsoft.graph.iosStoreApp",
+        "displayName": "Xbox",
+        "description": "Approved Xbox companion/streaming client. Managed by sf-intune-cac.",
+        "publisher": "Microsoft Corporation",
+        "bundleId": "com.microsoft.smartglass",
+        "appStoreUrl": "https://apps.apple.com/us/app/xbox/id736179781",
+        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
+        "minimumSupportedOperatingSystem": { "v16_0": true }
+      },
+      "assignments": []
+    },
+    {
+      "id": "windows-moonlight",
+      "platform": "windows",
+      "source": "existing",
+      "payload": {
+        "@odata.type": "#microsoft.graph.winGetApp",
+        "displayName": "Moonlight Game Streaming",
+        "description": "Approved Moonlight game streaming client. Managed by sf-intune-cac. Must be added once via Microsoft Store app (new) before this repo can assign it - see docs/bootstrap.md.",
+        "publisher": "Moonlight Game Streaming Project"
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
+    },
+    {
+      "id": "windows-windows-app",
+      "platform": "windows",
+      "source": "existing",
+      "payload": {
+        "@odata.type": "#microsoft.graph.winGetApp",
+        "displayName": "Windows App",
+        "description": "Approved Windows App (Microsoft remote desktop/Windows 365 client). Managed by sf-intune-cac. Must be added once via Microsoft Store app (new) before this repo can assign it - see docs/bootstrap.md.",
+        "publisher": "Microsoft Corporation"
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
+    },
+    {
+      "id": "windows-xbox",
+      "platform": "windows",
+      "source": "existing",
+      "payload": {
+        "@odata.type": "#microsoft.graph.winGetApp",
+        "displayName": "Xbox",
+        "description": "Approved Xbox companion/streaming client. Managed by sf-intune-cac. Must be added once via Microsoft Store app (new) before this repo can assign it - see docs/bootstrap.md.",
+        "publisher": "Microsoft Corporation"
+      },
+      "assignments": [{ "group": "sg-nuclear-family", "intent": "available" }]
     }
   ]
 }

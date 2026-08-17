@@ -72,7 +72,17 @@ function New-CaCPlan {
         }
 
         $adopted = $false
-        $alreadyManaged = Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix
+        # Adopted groups are, by definition, allowed a foreign (non-namePrefix) display name, so
+        # once the managed marker is present they are "already managed" on marker alone - exactly
+        # like adopted apps (see the App loop below, which never applies NamePrefix either).
+        # Requiring NamePrefix here too would make adoption never settle for any group whose real
+        # display name doesn't happen to start with the configured prefix.
+        $alreadyManaged = if ($adoptionSpec) {
+            Test-CaCManagedObject -Object $remote -ManagedMarker $marker
+        }
+        else {
+            Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix
+        }
         if ($adoptionSpec -and -not $alreadyManaged) {
             if (Test-CaCAdoptionGroupShape -Object $remote -Spec $adoptionSpec) {
                 $adopted = $true

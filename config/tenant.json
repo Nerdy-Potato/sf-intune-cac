@@ -16,6 +16,13 @@
         "securityEnabled": true,
         "mailEnabled": false,
         "groupTypes": []
+      },
+      {
+        "id": "sg-nuclear-family",
+        "displayName": "NuclearFamily-SG",
+        "securityEnabled": true,
+        "mailEnabled": false,
+        "groupTypes": []
       }
     ],
     "apps": [

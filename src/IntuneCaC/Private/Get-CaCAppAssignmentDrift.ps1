@@ -76,8 +76,13 @@ function Get-CaCRemoteAppCandidates {
             }
         }
         'existing' {
+            # Match on displayName AND @odata.type: an "existing" (typically Windows Store/winget)
+            # app can share its exact display name with an unrelated Android or iOS catalog entry
+            # for the same title (e.g. "Windows App", "Xbox"), which are different Graph types.
+            # displayName alone would let this entry adopt the wrong platform's remote object.
             $RemoteApps | Where-Object {
-                (Get-CaCProperty -InputObject $_ -Name 'displayName') -eq $App.payload.displayName
+                (Get-CaCProperty -InputObject $_ -Name 'displayName') -eq $App.payload.displayName -and
+                (Get-CaCProperty -InputObject $_ -Name '@odata.type') -eq $App.payload.'@odata.type'
             }
         }
     }
