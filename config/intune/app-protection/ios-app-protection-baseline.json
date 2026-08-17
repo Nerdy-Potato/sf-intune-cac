@@ -31,6 +31,30 @@
     {
       "mobileAppIdentifier": {
         "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.office.word"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.office.excel"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.office.powerpoint"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
+        "bundleId": "com.microsoft.onenote"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.iosMobileAppIdentifier",
         "bundleId": "com.microsoft.msedge"
       }
     },

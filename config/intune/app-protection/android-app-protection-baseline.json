@@ -26,6 +26,30 @@
     {
       "mobileAppIdentifier": {
         "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.office.word"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.office.excel"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.office.powerpoint"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
+        "packageId": "com.microsoft.office.onenote"
+      }
+    },
+    {
+      "mobileAppIdentifier": {
+        "@odata.type": "#microsoft.graph.androidMobileAppIdentifier",
         "packageId": "com.microsoft.emmx"
       }
     },
