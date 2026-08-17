@@ -372,6 +372,11 @@ function Invoke-CaCPlan {
         if (-not $PSCmdlet.ShouldProcess($action.Target, "$($action.Action) app")) { continue }
 
         $appAction = $action.Action
+        # Aliased to a distinct name (not $action) because Invoke-CaCAction has its own
+        # -Action string parameter; PowerShell variable names are case-insensitive, so a
+        # scriptblock invoked via `& $Operation` from inside Invoke-CaCAction resolves
+        # $action to that -Action string parameter, not this loop's plan-action object.
+        $updateAppAction = $action
         $operation = Invoke-CaCAction -Action "$($action.Action) app" -Target $action.Target -Operation {
             if ($appAction -eq 'Create') {
                 $created = & $GraphInvoker 'POST' 'deviceAppManagement/mobileApps' $app.payload
@@ -380,7 +385,7 @@ function Invoke-CaCPlan {
             }
 
             try {
-                & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($action.Data.Id)" $app.payload | Out-Null
+                & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($updateAppAction.Data.Id)" $app.payload | Out-Null
             }
             catch {
                 # Same legacy Managed Google Play API restriction handled in the Adopt step above:
@@ -392,7 +397,7 @@ function Invoke-CaCPlan {
                     throw
                 }
             }
-            return $action.Data.Id
+            return $updateAppAction.Data.Id
         }
         if (-not $operation.Succeeded) {
             $failedAppIds[$app.id] = $true

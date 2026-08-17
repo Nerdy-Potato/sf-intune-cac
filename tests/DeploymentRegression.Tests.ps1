@@ -47,6 +47,41 @@ Describe 'Deployment action propagation' {
             Should -Be 'Failed'
     }
 
+    It 'tolerates the Graph RoleScopeTagIds-only PATCH restriction on legacy Android app Update actions' {
+        $androidApp = $script:Configuration.Apps | Where-Object { $_.payload.'@odata.type' -eq '#microsoft.graph.androidManagedStoreApp' } |
+            Select-Object -First 1
+        $plan = [pscustomobject]@{
+            Kind    = 'App'
+            Action  = 'Update'
+            Target  = $androidApp.payload.displayName
+            Details = @()
+            Data    = [pscustomobject]@{
+                App = $androidApp
+                Id  = 'existing-object-id'
+            }
+        }
+
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            if ($Method -eq 'PATCH' -and $Uri -match 'mobileApps') {
+                throw "Response status code does not indicate success: 400 (Bad Request). Response body: " +
+                '{"error":{"code":"BadRequest","message":"Patching only ''RoleScopeTagIds'' is supported."}}'
+            }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        # Regression guard: the Update-app operation scriptblock must not reference $action
+        # directly, since PowerShell's case-insensitive variables let it collide with
+        # Invoke-CaCAction's own -Action string parameter and throw a spurious
+        # "property 'Data' cannot be found" error instead of applying the update.
+        $results | Where-Object Action -EQ 'Update app' | Select-Object -ExpandProperty Status |
+            Should -Be 'Applied'
+    }
+
     It 'does not silently ignore a failed action in an apply plan' {
         $group = $script:Configuration.Groups | Select-Object -First 1
         $plan = [pscustomobject]@{
