@@ -6,7 +6,7 @@
   ],
   "name": "ios-restrictions-child",
   "resource": "deviceConfigurations",
-  "assignments": [{ "group": "sg-youngest-children", "intent": "include" }],
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
   "payload": {
     "@odata.type": "#microsoft.graph.iosGeneralDeviceConfiguration",
     "displayName": "CaC - iOS - Device Restrictions (Child)",

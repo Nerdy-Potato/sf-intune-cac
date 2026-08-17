@@ -55,6 +55,11 @@ function New-CaCPlan {
 
         $groupObjectIds[$group.id] = $remote.id
 
+        if ($group.ContainsKey('memberType') -and $group.memberType -eq 'device') {
+            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group
+            continue
+        }
+
         $remoteMembers = @((& $GraphInvoker 'GET' "groups/$($remote.id)/members?`$select=id,userPrincipalName" $null).value | Where-Object { $_ })
         $remoteUpns = @($remoteMembers | ForEach-Object { $_.userPrincipalName } | Where-Object { $_ })
 

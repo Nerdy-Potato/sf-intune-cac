@@ -34,7 +34,7 @@
       "upnLocalPart": "samantha",
       "domain": "primary",
       "accountType": "productivity",
-      "tier": "young-adult",
+      "tier": "adult",
       "ageTierConfirmed": true
     },
     {
@@ -43,8 +43,8 @@
       "upnLocalPart": "adalynn",
       "domain": "primary",
       "accountType": "productivity",
-      "tier": "child",
-      "ageTierConfirmed": false
+      "tier": "teen",
+      "ageTierConfirmed": true
     },
     {
       "id": "lucas",
@@ -52,7 +52,7 @@
       "upnLocalPart": "lucas",
       "domain": "primary",
       "accountType": "productivity",
-      "tier": "child",
+      "tier": "teen",
       "ageTierConfirmed": true
     },
     {

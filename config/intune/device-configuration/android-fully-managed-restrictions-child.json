@@ -6,7 +6,7 @@
   ],
   "name": "android-fully-managed-restrictions-child",
   "resource": "deviceConfigurations",
-  "assignments": [{ "group": "sg-youngest-children", "intent": "include" }],
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
   "payload": {
     "@odata.type": "#microsoft.graph.androidDeviceOwnerGeneralDeviceConfiguration",
     "displayName": "CaC - Android - Fully Managed Restrictions (Child)",

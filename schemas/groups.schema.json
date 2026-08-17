@@ -21,6 +21,7 @@
           "mailNickname": { "type": "string", "pattern": "^[a-z0-9-]+$" },
           "description": { "type": "string", "minLength": 1 },
           "purpose": { "type": "string", "enum": ["assignment", "exclusion"] },
+          "memberType": { "type": "string", "enum": ["user", "device"] },
           "membership": {
             "type": "object",
             "additionalProperties": false,

@@ -16,14 +16,6 @@
       "membership": { "source": "tier", "values": ["adult"] }
     },
     {
-      "id": "sg-tier-young-adult",
-      "displayName": "CaC-Tier-YoungAdult",
-      "mailNickname": "cac-tier-youngadult",
-      "description": "18+ children. Security-only restrictions, no content or app controls.",
-      "purpose": "assignment",
-      "membership": { "source": "tier", "values": ["young-adult"] }
-    },
-    {
       "id": "sg-tier-teen",
       "displayName": "CaC-Tier-Teen",
       "mailNickname": "cac-tier-teen",
@@ -40,12 +32,31 @@
       "membership": { "source": "tier", "values": ["child"] }
     },
     {
-      "id": "sg-youngest-children",
-      "displayName": "CaC-Youngest-Children",
-      "mailNickname": "cac-youngest-children",
-      "description": "Explicit managed-device target for Emmerick, Broderick, and Cullen.",
+      "id": "sg-devices-adult",
+      "displayName": "CaC-Devices-Adult",
+      "mailNickname": "cac-devices-adult",
+      "description": "Device group corresponding to the adult tier. Devices are assigned manually.",
       "purpose": "assignment",
-      "membership": { "source": "explicit", "values": ["emmerick", "broderick", "cullen"] }
+      "memberType": "device",
+      "membership": { "source": "explicit", "values": [] }
+    },
+    {
+      "id": "sg-devices-teen",
+      "displayName": "CaC-Devices-Teen",
+      "mailNickname": "cac-devices-teen",
+      "description": "Device group corresponding to the teen tier. Devices are assigned manually.",
+      "purpose": "assignment",
+      "memberType": "device",
+      "membership": { "source": "explicit", "values": [] }
+    },
+    {
+      "id": "sg-devices-child",
+      "displayName": "CaC-Devices-Child",
+      "mailNickname": "cac-devices-child",
+      "description": "Device group corresponding to the child tier. Devices are assigned manually.",
+      "purpose": "assignment",
+      "memberType": "device",
+      "membership": { "source": "explicit", "values": [] }
     },
     {
       "id": "sg-admins",
