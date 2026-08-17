@@ -36,6 +36,34 @@ to this repository's IDs and creates both numeric-ID and legacy subjects for com
 repository is moved or renamed, pass its current IDs with `-GitHubOrganizationId` and
 `-GitHubRepositoryId`.
 
+### Grant the Intune Administrator directory role to the apply identity
+
+Microsoft requires the calling principal to hold the **Intune Administrator** (formerly "Intune
+Service Administrator") Microsoft Entra directory role before it can create or update device
+enrollment platform restriction configurations - the Graph application permissions above are not
+enough for this one resource type. Without it, Deploy fails with:
+
+```
+403 Forbidden - "Tenant is not Global Admin or Intune Service Admin. Operation is restricted."
+```
+
+This is a directory role assignment, not an app registration change, so it needs its own
+Global-Administrator-run step:
+
+```powershell
+Connect-MgGraph -Scopes RoleManagement.ReadWrite.Directory, Application.Read.All
+
+./bootstrap/Grant-CaCIntuneServiceAdminRole.ps1 -WhatIf
+./bootstrap/Grant-CaCIntuneServiceAdminRole.ps1
+```
+
+It activates the directory role in the tenant if this is its first use, and adds
+`sf-intune-cac-apply`'s service principal as a member. Idempotent and safe to re-run.
+`sf-intune-cac-plan` is read-only and does not need this role. This is not required by CI/CD on
+purpose: assigning a directory role needs `RoleManagement.ReadWrite.Directory`, and granting that
+permission to the apply identity itself would be a larger privilege increase than the problem it
+solves.
+
 ## 2. Set the repository variables
 
 The script prints these with the real values at the end of its run:
