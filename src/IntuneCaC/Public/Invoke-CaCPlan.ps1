@@ -43,6 +43,8 @@ function Invoke-CaCPlan {
         return $userIds[$Upn]
     }
 
+    $groupObjectIds = @{}
+
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Group' -and $_.Action -eq 'Create' })) {
         if (-not $PSCmdlet.ShouldProcess($action.Target, 'Create security group')) { continue }
 
@@ -55,6 +57,7 @@ function Invoke-CaCPlan {
             mailEnabled     = $false
             groupTypes      = @()
         }
+        $groupObjectIds[$group.id] = $created.id
 
         foreach ($member in $group.members) {
             & $GraphInvoker 'POST' "groups/$($created.id)/members/`$ref" @{
@@ -81,7 +84,6 @@ function Invoke-CaCPlan {
         Add-Result -Action 'Update membership' -Target $action.Target -Status 'Applied' -Message ($action.Details -join '; ')
     }
 
-    $groupObjectIds = @{}
     $existingGroups = @((& $GraphInvoker 'GET' 'groups?$select=id,displayName' $null).value | Where-Object { $_ })
     foreach ($group in $Configuration.Groups) {
         $remote = $existingGroups | Where-Object { $_.displayName -eq $group.displayName } | Select-Object -First 1

@@ -262,7 +262,7 @@ Describe 'New-CaCPlan' {
     Context 'when a member joins a tier' {
         BeforeAll {
             $script:MemberState = New-FakeTenant -InSync
-            $childGroup = $script:MemberState.Groups | Where-Object displayName -EQ 'CaC-Youngest-Children'
+            $childGroup = @($script:MemberState.Groups | Where-Object displayName -EQ 'CaC-Tier-Child')[0]
             $script:MemberState.Members[$childGroup.id] = @($script:MemberState.Members[$childGroup.id] | Select-Object -Skip 1)
 
             $script:MemberPlan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $script:MemberState)
