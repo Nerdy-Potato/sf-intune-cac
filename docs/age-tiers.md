@@ -9,7 +9,7 @@ parents, because a compromised adult account is worse than a compromised child a
 | `teen` | Lucas, Adalynn | Security, plus light content controls. Apps are blocklisted, not allowlisted. |
 | `child` | Cullen, Emmerick, Broderick | Strictest. Corporate-owned devices, approved apps only, forced GSA, tight web and media controls. |
 | `admin` | johnspaid | Administrative account. No productivity workloads. |
-| `excluded` | mauricemoss, robertjohnson | Break-glass. Excluded from everything by design. |
+| `excluded` | mauricemoss, bobjohnson | Break-glass. Excluded from everything by design. |
 
 The difference between tiers is visible in the policies themselves - for example
 `windows-restrictions-child` blocks the Microsoft Store so that software can only arrive through an
