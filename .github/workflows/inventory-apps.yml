@@ -1,0 +1,37 @@
+name: Inventory Intune apps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: inventory-apps
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    name: List live app objects and flag @odata.type mismatches
+    runs-on: ubuntu-latest
+    environment: plan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_PLAN_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: List apps
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: ./scripts/bootstrap/Get-CaCAppInventory.ps1
