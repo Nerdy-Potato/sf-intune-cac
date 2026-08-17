@@ -16,6 +16,15 @@ review the message before retrying. `POST` requests are not automatically retrie
 response may follow a successful create. Re-running the plan first discovers the object and avoids
 creating a duplicate.
 
+### One-time adoption cleanup
+
+The first plan may contain narrowly scoped `Adopt` rows for the Autopilot preparation group and the
+configured Microsoft Authenticator apps. Confirm the exact display name, group shape, app Graph type,
+and package/bundle identity before approval. After a successful apply, verify the managed marker and
+that existing membership/assignments remain intact, then remove `adoption` from `config/tenant.json`
+through a reviewed pull request. A mismatch remains blocked; never replace this section with a
+global unmanaged-object bypass.
+
 Deploy never regenerates a live plan with the write credential. Apply consumes only the reviewed
 artifact, whose commit and deterministic action hash are verified before any tenant connection is
 opened.

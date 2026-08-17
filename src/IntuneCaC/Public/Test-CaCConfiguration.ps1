@@ -62,6 +62,78 @@ function Test-CaCConfiguration {
     $tenant = $Configuration.Tenant
     $groupsById = @{}
     foreach ($group in $Configuration.Groups) { $groupsById[$group.id] = $group }
+    $appsById = @{}
+    foreach ($app in $Configuration.Apps) { $appsById[$app.id] = $app }
+
+    $adoption = Get-CaCProperty -InputObject $tenant -Name 'adoption'
+    if ($adoption) {
+        if ((Get-CaCProperty -InputObject $adoption -Name 'oneTime') -ne $true) {
+            Add-Finding -Severity 'Error' -Rule 'adoption/one-time' -Target 'tenant.json' -Message `
+                'The adoption section must be explicitly marked oneTime=true.'
+        }
+
+        $allowedGroupId = 'sg-autopilot-device-preparation-child'
+        $allowedGroupName = 'CaC-Autopilot-DevicePreparation-Child'
+        foreach ($spec in @(Get-CaCProperty -InputObject $adoption -Name 'groups' | Where-Object { $_ })) {
+            $specId = Get-CaCProperty -InputObject $spec -Name 'id'
+            $group = if ($groupsById.ContainsKey($specId)) { $groupsById[$specId] } else { $null }
+            if ($specId -ne $allowedGroupId) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/group-scope' -Target ([string] $specId) -Message `
+                    ("Only '{0}' may be adopted by display name." -f $allowedGroupId)
+                continue
+            }
+
+            if (-not $group) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/group-config' -Target $specId -Message `
+                    'The configured Autopilot adoption group must exist in identity/groups.json.'
+                continue
+            }
+
+            if ((Get-CaCProperty -InputObject $spec -Name 'displayName') -ne $allowedGroupName -or
+                $group.displayName -ne $allowedGroupName -or
+                (Get-CaCProperty -InputObject $spec -Name 'securityEnabled') -ne $true -or
+                (Get-CaCProperty -InputObject $spec -Name 'mailEnabled') -ne $false -or
+                @(Get-CaCProperty -InputObject $spec -Name 'groupTypes').Count -ne 0) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/group-shape' -Target $specId -Message `
+                    'Autopilot adoption requires the exact configured display name and an assigned security group (securityEnabled=true, mailEnabled=false, groupTypes=[]).'
+            }
+        }
+
+        $allowedAppIds = @('android-authenticator', 'ios-authenticator')
+        foreach ($spec in @(Get-CaCProperty -InputObject $adoption -Name 'apps' | Where-Object { $_ })) {
+            $specId = Get-CaCProperty -InputObject $spec -Name 'id'
+            if ($specId -notin $allowedAppIds) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/app-scope' -Target ([string] $specId) -Message `
+                    ("Only the configured Microsoft Authenticator apps may be adopted: {0}." -f ($allowedAppIds -join ', '))
+                continue
+            }
+
+            $app = if ($appsById.ContainsKey($specId)) { $appsById[$specId] } else { $null }
+            if (-not $app) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/app-config' -Target $specId -Message `
+                    'The configured Microsoft Authenticator adoption app must exist in the approved app catalog.'
+                continue
+            }
+
+            $identity = Get-CaCProperty -InputObject $spec -Name 'identity'
+            $identityKind = Get-CaCProperty -InputObject $identity -Name 'kind'
+            $identityValue = Get-CaCProperty -InputObject $identity -Name 'value'
+            $configuredIdentity = if ($identityKind -in @('packageId', 'bundleId')) {
+                Get-CaCProperty -InputObject $app.payload -Name $identityKind
+            }
+            else {
+                $null
+            }
+            if ((Get-CaCProperty -InputObject $spec -Name 'displayName') -ne 'Microsoft Authenticator' -or
+                (Get-CaCProperty -InputObject $spec -Name 'displayName') -ne $app.payload.displayName -or
+                (Get-CaCProperty -InputObject $spec -Name 'odataType') -ne $app.payload.'@odata.type' -or
+                $identityKind -notin @('packageId', 'bundleId') -or
+                $identityValue -ne $configuredIdentity) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/app-identity' -Target $specId -Message `
+                    'Authenticator adoption requires the exact configured display name, Graph type, and existing immutable packageId or bundleId.'
+            }
+        }
+    }
 
     $duplicateAppIds = $Configuration.Apps | Group-Object -Property { $_.id } | Where-Object Count -GT 1
     foreach ($duplicate in $duplicateAppIds) {

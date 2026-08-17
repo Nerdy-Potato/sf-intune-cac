@@ -19,6 +19,7 @@ function Format-CaCPlan {
     end {
         $changes = @($items | Where-Object { $_.Action -ne 'NoChange' })
         $blocked = @($items | Where-Object { $_.Action -in @('Skip', 'Prerequisite') })
+        $adoptions = @($items | Where-Object { $_.Action -eq 'Adopt' })
 
         $lines = [System.Collections.Generic.List[string]]::new()
         $lines.Add('## Intune configuration plan')
@@ -38,6 +39,12 @@ function Format-CaCPlan {
         if ($blocked) {
             $lines.Add('> [!CAUTION]')
             $lines.Add('> This plan contains skipped or prerequisite actions. Deployment is blocked until they are resolved.')
+            $lines.Add('')
+        }
+
+        if ($adoptions) {
+            $lines.Add('> [!WARNING]')
+            $lines.Add('> This plan contains one-time adoption actions. Verify the exact identity and shape, then remove the adoption section from `config/tenant.json` after the successful apply.')
             $lines.Add('')
         }
 

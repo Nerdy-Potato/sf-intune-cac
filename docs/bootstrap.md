@@ -102,3 +102,19 @@ The first deployment against a tenant that has never been touched by this reposi
 eight groups, the approved mobile app catalog, and the configured policies. Read that plan carefully; it is the largest one that will ever be
 produced. Consider running the deployment on a workday morning rather than a Friday evening - a
 compliance policy landing badly costs somebody their mail on their phone.
+
+### One-time adoption of the existing Autopilot and Authenticator objects
+
+`config/tenant.json` contains an explicit, one-time `adoption` section for the newly created
+`CaC-Autopilot-DevicePreparation-Child` group and the configured Android/iOS Microsoft Authenticator
+apps. The plan must show `Adopt` only for an exact display-name match plus the expected group shape or
+the app's immutable package/bundle identity and Graph type. Any ambiguity or mismatch is blocked.
+Adoption only adds the repository managed marker; existing group membership and app assignments are
+preserved unless a separate desired-state action reconciles them.
+
+Before approving the first plan, verify those `Adopt` rows and the object IDs in the JSON artifact.
+After the apply succeeds, verify the managed marker and membership/assignment preservation in the
+tenant, then remove the `adoption` section from `config/tenant.json` in a follow-up pull request.
+The deployment checkout is read-only by design, so cleanup is intentionally a reviewed repository
+change rather than an automatic commit. If adoption fails, leave the section in place and re-plan;
+do not broaden it or use a global takeover switch.

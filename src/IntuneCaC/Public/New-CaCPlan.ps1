@@ -49,11 +49,20 @@ function New-CaCPlan {
             })
     }
 
-    $existingGroups = @((& $GraphInvoker 'GET' 'groups?$select=id,displayName,description' $null).value | Where-Object { $_ })
+    $existingGroups = @((& $GraphInvoker 'GET' 'groups?$select=id,displayName,description,securityEnabled,mailEnabled,groupTypes' $null).value | Where-Object { $_ })
     $groupObjectIds = @{}
 
     foreach ($group in $Configuration.Groups) {
-        $remote = $existingGroups | Where-Object { $_.displayName -eq $group.displayName } | Select-Object -First 1
+        $groupCandidates = @($existingGroups | Where-Object { $_.displayName -eq $group.displayName })
+        $adoptionSpec = Get-CaCAdoptionSpec -Configuration $Configuration -Kind Group -Id $group.id
+        if ($adoptionSpec -and $groupCandidates.Count -gt 1) {
+            Add-Action -Kind 'Group' -Action 'Skip' -Target $group.displayName -Data $group -Details @(
+                'one-time adoption is fail-closed: more than one group has the exact configured display name'
+            )
+            continue
+        }
+
+        $remote = $groupCandidates | Select-Object -First 1
 
         if (-not $remote) {
             Add-Action -Kind 'Group' -Action 'Create' -Target $group.displayName -Data $group -Details @(
@@ -62,7 +71,32 @@ function New-CaCPlan {
             continue
         }
 
-        if (-not (Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix)) {
+        $adopted = $false
+        $alreadyManaged = Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix
+        if ($adoptionSpec -and -not $alreadyManaged) {
+            if (Test-CaCAdoptionGroupShape -Object $remote -Spec $adoptionSpec) {
+                $adopted = $true
+                $groupObjectIds[$group.id] = $remote.id
+                Add-Action -Kind 'Group' -Action 'Adopt' -Target $group.displayName -Data ([pscustomobject]@{
+                        Group          = $group
+                        Id             = $remote.id
+                        ExistingDescription = Get-CaCProperty -InputObject $remote -Name 'description'
+                    }) -ObjectId $remote.id -Details @(
+                    'one-time adoption matched the exact configured display name and assigned security-group shape',
+                    'establish the repository managed marker; preserve existing membership during adoption'
+                )
+            }
+            else {
+                Add-Action -Kind 'Group' -Action 'Skip' -Target $group.displayName -Data $group -Details @(
+                    'one-time adoption is fail-closed: exact display name exists but the expected assigned security-group shape did not match'
+                )
+                continue
+            }
+        }
+
+        if ($adopted) { continue }
+
+        if (-not $alreadyManaged) {
             Add-Action -Kind 'Group' -Action 'Skip' -Target $group.displayName -Data $group -Details @(
                 'an unmanaged group already uses this display name; refusing to take it over'
             )
@@ -77,7 +111,9 @@ function New-CaCPlan {
         }
 
         $remoteMembers = @((& $GraphInvoker 'GET' "groups/$($remote.id)/members?`$select=id,userPrincipalName" $null).value | Where-Object { $_ })
-        $remoteUpns = @($remoteMembers | ForEach-Object { $_.userPrincipalName } | Where-Object { $_ })
+        $remoteUpns = @($remoteMembers | ForEach-Object {
+                Get-CaCProperty -InputObject $_ -Name 'userPrincipalName'
+            } | Where-Object { $_ })
 
         $toAdd = @($group.members | Where-Object { $_ -notin $remoteUpns })
         $toRemove = @($remoteUpns | Where-Object { $_ -notin $group.members })
@@ -101,10 +137,45 @@ function New-CaCPlan {
 
     $remoteApps = @((& $GraphInvoker 'GET' 'deviceAppManagement/mobileApps' $null).value | Where-Object { $_ })
     $appObjectIds = @{}
+    $appMarker = 'Managed by sf-intune-cac.'
     foreach ($app in $Configuration.Apps) {
-        $remote = Find-CaCRemoteApp -App $app -RemoteApps $remoteApps
+        $remoteCandidates = @(Get-CaCRemoteAppCandidates -App $app -RemoteApps $remoteApps)
+        $remote = $remoteCandidates | Select-Object -First 1
+        $adoptionSpec = Get-CaCAdoptionSpec -Configuration $Configuration -Kind App -Id $app.id
+        $adopted = $false
+        $alreadyManaged = $remote -and (Test-CaCManagedObject -Object $remote -ManagedMarker $appMarker)
 
-        if ($remote -and -not (Test-CaCManagedObject -Object $remote -ManagedMarker 'Managed by sf-intune-cac.')) {
+        if ($adoptionSpec -and -not $alreadyManaged) {
+            if ($remoteCandidates.Count -gt 1) {
+                Add-Action -Kind 'App' -Action 'Skip' -Target $app.payload.displayName -Data $app -Details @(
+                    'one-time adoption is fail-closed: more than one app has the configured immutable package or bundle identity'
+                )
+                continue
+            }
+
+            if ($remote -and (Test-CaCAdoptionAppIdentity -Object $remote -Spec $adoptionSpec)) {
+                $adopted = $true
+                $appObjectIds[$app.id] = $remote.id
+                Add-Action -Kind 'App' -Action 'Adopt' -Target $app.payload.displayName -Data ([pscustomobject]@{
+                        App                 = $app
+                        Id                  = $remote.id
+                        ExistingDescription = Get-CaCProperty -InputObject $remote -Name 'description'
+                    }) -ObjectId $remote.id -Details @(
+                    'one-time adoption matched the exact configured display name, @odata.type, and immutable package or bundle identity',
+                    'establish the repository managed marker without changing existing assignments'
+                )
+            }
+            elseif (@($remoteApps | Where-Object {
+                        (Get-CaCProperty -InputObject $_ -Name 'displayName') -eq $adoptionSpec.displayName
+                    })) {
+                Add-Action -Kind 'App' -Action 'Skip' -Target $app.payload.displayName -Data $app -Details @(
+                    'one-time adoption is fail-closed: the configured display name exists but its immutable package or bundle identity/type did not match'
+                )
+                continue
+            }
+        }
+
+        if ($remote -and -not $adopted -and -not $alreadyManaged) {
             Add-Action -Kind 'App' -Action 'Skip' -Target $app.payload.displayName -Data $app -Details @(
                 'an unmanaged app already uses this package, bundle, or display name; refusing to take it over'
             )
@@ -129,7 +200,10 @@ function New-CaCPlan {
         }
 
         $appObjectIds[$app.id] = $remote.id
-        $drift = Get-CaCPayloadDrift -Desired $app.payload -Actual $remote
+        $drift = @(Get-CaCPayloadDrift -Desired $app.payload -Actual $remote)
+        if ($adopted) {
+            $drift = @($drift | Where-Object { $_ -notlike 'description:*' })
+        }
         if ($drift) {
             Add-Action -Kind 'App' -Action 'Update' -Target $app.payload.displayName -Details $drift -Data ([pscustomobject]@{
                     App = $app

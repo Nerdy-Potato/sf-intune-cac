@@ -57,7 +57,7 @@ function Get-CaCPreservedAppAssignments {
         })
 }
 
-function Find-CaCRemoteApp {
+function Get-CaCRemoteAppCandidates {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] $App,
@@ -82,5 +82,15 @@ function Find-CaCRemoteApp {
         }
     }
 
-    return $matchesIdentity | Select-Object -First 1
+    return @($matchesIdentity)
+}
+
+function Find-CaCRemoteApp {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $App,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $RemoteApps
+    )
+
+    return @(Get-CaCRemoteAppCandidates -App $App -RemoteApps $RemoteApps | Select-Object -First 1)
 }

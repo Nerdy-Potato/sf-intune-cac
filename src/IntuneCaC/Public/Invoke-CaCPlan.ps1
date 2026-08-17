@@ -103,10 +103,11 @@ function Invoke-CaCPlan {
     $groupObjectIds = @{}
 
     # Managed ids are carried by the reviewed plan. This deliberately does not query the tenant.
-    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Group' -and $_.Action -eq 'NoChange' })) {
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Group' -and $_.Action -in @('NoChange', 'Adopt') })) {
         if ($action.Data -and $action.Data.id -and $action.ObjectId -and
             -not $blockedGroupIds.ContainsKey($action.Data.id)) {
-            $groupObjectIds[$action.Data.id] = $action.ObjectId
+            $groupKey = if ($action.Data.PSObject.Properties['Group']) { $action.Data.Group.id } else { $action.Data.id }
+            if ($groupKey) { $groupObjectIds[$groupKey] = $action.ObjectId }
         }
     }
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'GroupMembership' })) {
@@ -114,6 +115,44 @@ function Invoke-CaCPlan {
             -not $blockedGroupIds.ContainsKey($action.Data.GroupKey)) {
             $groupObjectIds[$action.Data.GroupKey] = $action.Data.GroupId
         }
+    }
+
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Group' -and $_.Action -eq 'Adopt' })) {
+        $adoptGroupAction = $action
+        $group = $adoptGroupAction.Data.Group
+        if ($group -and ($blockedGroupIds.ContainsKey($group.id) -or $failedGroupIds.ContainsKey($group.id))) {
+            Add-Result -Action 'Adopt group' -Target $action.Target -Status 'Failed' `
+                -Message 'the group was skipped or failed in the reviewed plan'
+            continue
+        }
+
+        if (-not $PSCmdlet.ShouldProcess($action.Target, 'Adopt group')) { continue }
+
+        $operation = Invoke-CaCAction -Action 'Adopt group' -Target $action.Target -Operation {
+            $existingDescription = [string] $adoptGroupAction.Data.ExistingDescription
+            $description = if ($existingDescription -like "*$($Configuration.Tenant.managedMarker)*") {
+                $existingDescription
+            }
+            elseif ([string]::IsNullOrWhiteSpace($existingDescription)) {
+                '{0} {1}' -f $group.description, $Configuration.Tenant.managedMarker
+            }
+            else {
+                '{0} {1}' -f $existingDescription.Trim(), $Configuration.Tenant.managedMarker
+            }
+
+            & $GraphInvoker 'PATCH' "groups/$($adoptGroupAction.ObjectId)" @{ description = $description } | Out-Null
+            $adoptGroupAction.ObjectId
+        }
+        if (-not $operation.Succeeded) {
+            if ($group -and $group.id) {
+                $failedGroupIds[$group.id] = $true
+                $groupObjectIds.Remove($group.id)
+            }
+            continue
+        }
+
+        Add-Result -Action 'Adopt group' -Target $action.Target -Status 'Applied' `
+            -Message 'managed marker established; existing membership preserved'
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Group' -and $_.Action -eq 'Create' })) {
@@ -186,11 +225,51 @@ function Invoke-CaCPlan {
     $policyIds = @{}
     $appIds = @{}
 
-    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'App' -and $_.Action -eq 'NoChange' })) {
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'App' -and $_.Action -in @('NoChange', 'Adopt') })) {
         if ($action.Data -and $action.Data.App -and $action.Data.App.id -and $action.Data.Id -and
             -not $blockedAppIds.ContainsKey($action.Data.App.id)) {
             $appIds[$action.Data.App.id] = $action.Data.Id
         }
+    }
+
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'App' -and $_.Action -eq 'Adopt' })) {
+        $adoptAppAction = $action
+        $app = $adoptAppAction.Data.App
+        if ($app -and ($blockedAppIds.ContainsKey($app.id) -or $failedAppIds.ContainsKey($app.id))) {
+            Add-Result -Action 'Adopt app' -Target $action.Target -Status 'Failed' `
+                -Message 'the app was skipped or failed in the reviewed plan'
+            continue
+        }
+
+        if (-not $PSCmdlet.ShouldProcess($action.Target, 'Adopt app')) { continue }
+
+        $operation = Invoke-CaCAction -Action 'Adopt app' -Target $action.Target -Operation {
+            $existingDescription = [string] $adoptAppAction.Data.ExistingDescription
+            $description = if ($existingDescription -like '*Managed by sf-intune-cac.*') {
+                $existingDescription
+            }
+            elseif ([string]::IsNullOrWhiteSpace($existingDescription)) {
+                [string] $app.payload.description
+            }
+            else {
+                '{0} {1}' -f $existingDescription.Trim(), 'Managed by sf-intune-cac.'
+            }
+
+            & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($adoptAppAction.ObjectId)" @{
+                description = $description
+            } | Out-Null
+            $adoptAppAction.ObjectId
+        }
+        if (-not $operation.Succeeded) {
+            if ($app -and $app.id) {
+                $failedAppIds[$app.id] = $true
+                $appIds.Remove($app.id)
+            }
+            continue
+        }
+
+        Add-Result -Action 'Adopt app' -Target $action.Target -Status 'Applied' `
+            -Message 'managed marker established; existing assignments preserved'
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'App' -and $_.Action -in @('Create', 'Update') })) {

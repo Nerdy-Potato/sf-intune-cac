@@ -284,7 +284,9 @@ Describe 'New-CaCPlan' {
         It 'keeps the policy in the same plan so apply can bind the new app id' {
             $state = New-FakeTenant -InSync
             $defender = $script:Config.Apps | Where-Object id -EQ 'android-defender'
-            $remoteDefender = $state.Apps | Where-Object packageId -EQ $defender.payload.packageId |
+            $remoteDefender = $state.Apps | Where-Object {
+                $_.PSObject.Properties['packageId'] -and $_.packageId -eq $defender.payload.packageId
+            } |
                 Select-Object -First 1
             $state.Apps = @($state.Apps | Where-Object id -NE $remoteDefender.id)
 
@@ -304,7 +306,9 @@ Describe 'New-CaCPlan' {
         It 'does not propose mutating the unmanaged app' {
             $state = New-FakeTenant -InSync
             $defender = $script:Config.Apps | Where-Object id -EQ 'android-defender'
-            $managed = $state.Apps | Where-Object packageId -EQ $defender.payload.packageId |
+            $managed = $state.Apps | Where-Object {
+                $_.PSObject.Properties['packageId'] -and $_.packageId -eq $defender.payload.packageId
+            } |
                 Select-Object -First 1
             $state.Apps = @($state.Apps | Where-Object id -NE $managed.id)
             $state.Apps += [pscustomobject]@{
@@ -319,6 +323,130 @@ Describe 'New-CaCPlan' {
 
             @($appActions | Where-Object { $_.Kind -eq 'App' -and $_.Action -in @('Create', 'Update') }) |
                 Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'when the configured bootstrap objects already exist without a marker' {
+        BeforeAll {
+            $script:AdoptionState = New-FakeTenant -InSync
+            $autopilot = $script:AdoptionState.Groups |
+                Where-Object displayName -EQ 'CaC-Autopilot-DevicePreparation-Child'
+            $autopilot.description = 'Created by the Autopilot bootstrap'
+            $autopilot | Add-Member -Force -NotePropertyName securityEnabled -NotePropertyValue $true
+            $autopilot | Add-Member -Force -NotePropertyName mailEnabled -NotePropertyValue $false
+            $autopilot | Add-Member -Force -NotePropertyName groupTypes -NotePropertyValue @()
+            $script:AdoptionState.Members[$autopilot.id] = @(
+                [pscustomobject]@{ id = 'device-1'; displayName = 'existing-device' }
+            )
+
+            foreach ($auth in @('android-authenticator', 'ios-authenticator')) {
+                $app = $script:Config.Apps | Where-Object id -EQ $auth
+                $remote = if ($auth -like 'android-*') {
+                    $script:AdoptionState.Apps | Where-Object {
+                        $_.PSObject.Properties['packageId'] -and $_.packageId -eq $app.payload.packageId
+                    }
+                }
+                else {
+                    $script:AdoptionState.Apps | Where-Object {
+                        $_.PSObject.Properties['bundleId'] -and $_.bundleId -eq $app.payload.bundleId
+                    }
+                }
+                $remote.description = 'Created by the application bootstrap'
+            }
+
+            $android = $script:AdoptionState.Apps | Where-Object {
+                $_.PSObject.Properties['packageId'] -and $_.packageId -eq 'com.azure.authenticator'
+            }
+            $script:AdoptionState.AppAssignments[$android.id] = @([pscustomobject]@{
+                    intent = 'available'
+                    target = [pscustomobject]@{
+                        '@odata.type' = '#microsoft.graph.groupAssignmentTarget'
+                        groupId       = 'external-group'
+                    }
+                })
+            $script:AdoptionPlan = New-CaCPlan -Configuration $script:Config `
+                -GraphInvoker (New-FakeInvoker -State $script:AdoptionState)
+        }
+
+        It 'plans adoption only for the exact configured group and Authenticator identities' {
+            $groupAction = @($script:AdoptionPlan | Where-Object {
+                    $_.Kind -eq 'Group' -and $_.Target -eq 'CaC-Autopilot-DevicePreparation-Child'
+                })
+            $groupAction.Action | Should -Be 'Adopt'
+            @($script:AdoptionPlan | Where-Object {
+                    $_.Kind -eq 'GroupMembership' -and $_.Target -eq 'CaC-Autopilot-DevicePreparation-Child'
+                }) | Should -BeNullOrEmpty
+
+            $authAdoptions = @($script:AdoptionPlan | Where-Object {
+                    $_.Kind -eq 'App' -and $_.Action -eq 'Adopt' -and
+                    $_.Target -eq 'Microsoft Authenticator'
+                })
+            $authAdoptions.Count | Should -Be 2
+            @($script:AdoptionPlan | Where-Object {
+                    $_.Kind -eq 'AppAssignment' -and $_.Target -eq 'Microsoft Authenticator'
+                }).Data.PreservedAssignments.target.groupId | Should -Contain 'external-group'
+            $script:AdoptionPlan | Format-CaCPlan | Should -Match 'one-time adoption actions'
+        }
+
+        It 'fails closed when the group shape or app Graph type does not match' {
+            $state = New-FakeTenant -InSync
+            $autopilot = $state.Groups | Where-Object displayName -EQ 'CaC-Autopilot-DevicePreparation-Child'
+            $autopilot.description = 'Created by the Autopilot bootstrap'
+            $autopilot | Add-Member -Force -NotePropertyName securityEnabled -NotePropertyValue $false
+            $autopilot | Add-Member -Force -NotePropertyName mailEnabled -NotePropertyValue $false
+            $autopilot | Add-Member -Force -NotePropertyName groupTypes -NotePropertyValue @()
+            $android = $state.Apps | Where-Object {
+                $_.PSObject.Properties['packageId'] -and $_.packageId -eq 'com.azure.authenticator'
+            }
+            $android.description = 'Created by the application bootstrap'
+            $android.'@odata.type' = '#microsoft.graph.iosStoreApp'
+
+            $plan = New-CaCPlan -Configuration $script:Config `
+                -GraphInvoker (New-FakeInvoker -State $state)
+
+            @($plan | Where-Object {
+                    $_.Action -eq 'Adopt' -and $_.Target -in @(
+                        'CaC-Autopilot-DevicePreparation-Child', 'Microsoft Authenticator'
+                    )
+                }) | Should -BeNullOrEmpty
+            @($plan | Where-Object {
+                    $_.Action -eq 'Skip' -and $_.Target -in @(
+                        'CaC-Autopilot-DevicePreparation-Child', 'Microsoft Authenticator'
+                    )
+                }).Count | Should -BeGreaterThan 0
+        }
+
+        It 'does not repeat adoption after the managed marker is established' {
+            $adoptionActions = @($script:AdoptionPlan | Where-Object Action -EQ 'Adopt')
+            $results = Invoke-CaCPlan -Plan $adoptionActions -Configuration $script:Config `
+                -GraphInvoker (New-FakeInvoker -State $script:AdoptionState) -Confirm:$false
+            @($results | Where-Object Status -NE 'Applied') | Should -BeNullOrEmpty
+
+            $autopilot = $script:AdoptionState.Groups |
+                Where-Object displayName -EQ 'CaC-Autopilot-DevicePreparation-Child'
+            $autopilot.description = '{0} {1}' -f $autopilot.description, $script:Config.Tenant.managedMarker
+            foreach ($auth in @('android-authenticator', 'ios-authenticator')) {
+                $app = $script:Config.Apps | Where-Object id -EQ $auth
+                $remote = if ($auth -like 'android-*') {
+                    $script:AdoptionState.Apps | Where-Object {
+                        $_.PSObject.Properties['packageId'] -and $_.packageId -eq $app.payload.packageId
+                    }
+                }
+                else {
+                    $script:AdoptionState.Apps | Where-Object {
+                        $_.PSObject.Properties['bundleId'] -and $_.bundleId -eq $app.payload.bundleId
+                    }
+                }
+                $remote.description = '{0} {1}' -f $remote.description, 'Managed by sf-intune-cac.'
+            }
+
+            $second = New-CaCPlan -Configuration $script:Config `
+                -GraphInvoker (New-FakeInvoker -State $script:AdoptionState)
+            @($second | Where-Object {
+                    $_.Action -eq 'Adopt' -and $_.Target -in @(
+                        'CaC-Autopilot-DevicePreparation-Child', 'Microsoft Authenticator'
+                    )
+                }) | Should -BeNullOrEmpty
         }
     }
 
@@ -428,7 +556,9 @@ Describe 'Invoke-CaCPlan' {
 
     It 'preserves app assignments outside the child app catalog scope' {
         $state = New-FakeTenant -InSync
-        $app = $state.Apps | Where-Object packageId -EQ 'com.microsoft.scmx' | Select-Object -First 1
+        $app = $state.Apps | Where-Object {
+            $_.PSObject.Properties['packageId'] -and $_.packageId -eq 'com.microsoft.scmx'
+        } | Select-Object -First 1
         $state.AppAssignments[$app.id] = @([pscustomobject]@{
             intent = 'required'
             target = [pscustomobject]@{
@@ -477,7 +607,9 @@ Describe 'Invoke-CaCPlan' {
 
     It 'does not take over an unmanaged app or policy with the desired identity' {
         $state = New-FakeTenant -InSync
-        $app = $state.Apps | Where-Object packageId -EQ 'com.microsoft.scmx' | Select-Object -First 1
+        $app = $state.Apps | Where-Object {
+            $_.PSObject.Properties['packageId'] -and $_.packageId -eq 'com.microsoft.scmx'
+        } | Select-Object -First 1
         $app.description = 'managed by another system'
         $policy = $state.Policies['deviceCompliancePolicies'] |
             Where-Object displayName -EQ 'CaC - Windows - Compliance Baseline'

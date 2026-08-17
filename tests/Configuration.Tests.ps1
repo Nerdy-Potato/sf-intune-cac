@@ -52,6 +52,13 @@ Describe 'Repository configuration' {
         $group.membership.source | Should -Be 'explicit'
     }
 
+    It 'keeps adoption explicit, one-time, and scoped to the configured bootstrap objects' {
+        $script:Config.Tenant.adoption.oneTime | Should -BeTrue
+        $script:Config.Tenant.adoption.enabled | Should -BeTrue
+        $script:Config.Tenant.adoption.groups.id | Should -Be 'sg-autopilot-device-preparation-child'
+        @($script:Config.Tenant.adoption.apps.id) | Should -Be @('android-authenticator', 'ios-authenticator')
+    }
+
     It 'defines one manually managed device group for each age tier' {
         $deviceGroups = @($script:Config.Groups | Where-Object {
             $_ -is [hashtable] -and $_.ContainsKey('memberType') -and $_['memberType'] -eq 'device'
@@ -176,5 +183,19 @@ Describe 'Validation rules' {
 
         $result = Test-CaCConfiguration -Configuration $script:Draft
         @($result | Where-Object Rule -EQ 'policy/resource') | Should -Not -BeNullOrEmpty
+    }
+
+    It 'rejects an adoption entry outside the exact Autopilot and Authenticator scope' {
+        $script:Draft.Tenant.adoption.groups[0].id = 'sg-tier-adult'
+
+        $result = Test-CaCConfiguration -Configuration $script:Draft
+        @($result | Where-Object Rule -EQ 'adoption/group-scope') | Should -Not -BeNullOrEmpty
+    }
+
+    It 'rejects an adoption section that is not explicitly one-time' {
+        $script:Draft.Tenant.adoption.oneTime = $false
+
+        $result = Test-CaCConfiguration -Configuration $script:Draft
+        @($result | Where-Object Rule -EQ 'adoption/one-time') | Should -Not -BeNullOrEmpty
     }
 }
