@@ -68,8 +68,12 @@ function Invoke-CaCGraphRequest {
         }
         catch {
             $status = 0
+            $responseBody = $null
             if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) {
                 $status = [int] $_.Exception.Response.StatusCode
+            }
+            if ($_.PSObject.Properties['ErrorDetails'] -and $_.ErrorDetails -and $_.ErrorDetails.Message) {
+                $responseBody = $_.ErrorDetails.Message
             }
 
             $retryableMethod = $Method -in @('GET', 'PATCH', 'PUT', 'DELETE')
@@ -77,7 +81,21 @@ function Invoke-CaCGraphRequest {
                 $Uri -match '/(assign|members/|targetApps)'
             if (-not $retryableMethod -or
                 (($status -notin @(429, 500, 502, 503, 504) -and -not $transientReferenceNotFound)) -or
-                $attempt -eq $MaxAttempts) { throw }
+                $attempt -eq $MaxAttempts) {
+                if ($responseBody) {
+                    $exception = [System.Exception]::new(
+                        "$($_.Exception.Message) Response body: $responseBody",
+                        $_.Exception
+                    )
+                    if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) {
+                        $exception | Add-Member -NotePropertyName Response -NotePropertyValue $_.Exception.Response
+                    }
+
+                    throw $exception
+                }
+
+                throw
+            }
 
             $delay = [int] [Math]::Pow(2, $attempt)
             Write-Warning "Graph returned $status for $Method $requestUri. Retrying in $delay second(s) (attempt $attempt of $MaxAttempts)."

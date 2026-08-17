@@ -732,4 +732,33 @@ Describe 'Graph client safety' {
             $script:requestCount | Should -Be 1
         }
     }
+
+    It 'surfaces Graph error details when a request ultimately fails' {
+        InModuleScope IntuneCaC {
+            Connect-CaCGraph -TenantId '00000000-0000-0000-0000-000000000000' `
+                -AccessToken 'not-a-real-token'
+            Mock Invoke-RestMethod {
+                $exception = [System.Exception]::new(
+                    'Response status code does not indicate success: 400 (Bad Request).'
+                )
+                $exception | Add-Member -NotePropertyName Response `
+                    -NotePropertyValue ([pscustomobject]@{ StatusCode = 400 })
+                $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $exception,
+                    'MockGraphFailure',
+                    [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                    $null
+                )
+                $errorRecord.ErrorDetails = [System.Management.Automation.ErrorDetails]::new(
+                    '{"error":{"code":"BadRequest","message":"assignment target is invalid"}}'
+                )
+
+                throw $errorRecord
+            }
+
+            {
+                Invoke-CaCGraphRequest -Method POST -Uri 'groups' -Body @{} -MaxAttempts 1
+            } | Should -Throw '*Response body: {"error":{"code":"BadRequest","message":"assignment target is invalid"}}*'
+        }
+    }
 }
