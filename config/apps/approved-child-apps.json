@@ -1,8 +1,8 @@
 {
   "$schema": "../../schemas/apps.schema.json",
   "comment": [
-    "This is the child-tier allowlist. Required security clients install automatically; productivity",
-    "apps are available in Company Portal but cannot be installed until explicitly declared here.",
+    "This is the child-tier allowlist. Required security and Microsoft 365 clients install automatically;",
+    "other approved apps remain available in Company Portal but cannot be installed until declared here.",
     "Android entries are added through the Managed Google Play connector configured in the tenant."
   ],
   "apps": [
@@ -46,7 +46,7 @@
         "packageId": "com.microsoft.office.officehubrow",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.officehubrow"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-word",
@@ -60,7 +60,7 @@
         "packageId": "com.microsoft.office.word",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.word"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-excel",
@@ -74,7 +74,7 @@
         "packageId": "com.microsoft.office.excel",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.excel"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-powerpoint",
@@ -88,7 +88,7 @@
         "packageId": "com.microsoft.office.powerpoint",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.powerpoint"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-onenote",
@@ -102,7 +102,7 @@
         "packageId": "com.microsoft.office.onenote",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.onenote"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-outlook",
@@ -116,7 +116,7 @@
         "packageId": "com.microsoft.office.outlook",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.outlook"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-teams",
@@ -130,7 +130,7 @@
         "packageId": "com.microsoft.teams",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.teams"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-onedrive",
@@ -144,7 +144,7 @@
         "packageId": "com.microsoft.skydrive",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.skydrive"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "android-edge",
@@ -206,7 +206,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-word",
@@ -222,7 +222,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-excel",
@@ -238,7 +238,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-powerpoint",
@@ -254,7 +254,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-onenote",
@@ -270,7 +270,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-outlook",
@@ -286,7 +286,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-teams",
@@ -302,7 +302,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-onedrive",
@@ -318,7 +318,7 @@
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "ios-edge",
@@ -346,7 +346,7 @@
         "description": "Approved Word, Excel, PowerPoint, Outlook, OneNote, Teams and OneDrive suite. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation"
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
       "id": "windows-gsa-client",

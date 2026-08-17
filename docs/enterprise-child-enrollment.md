@@ -27,10 +27,9 @@ are deliberately not stored in this public repository.
 
 ## Approved applications
 
-`config/apps/approved-child-apps.json` is the allowlist. Microsoft Defender and Authenticator are
-required. Microsoft 365 Copilot, Word, Excel, PowerPoint, OneNote, Outlook, Teams, OneDrive, and Edge
-are approved for self-service installation. Public stores and unknown-source installation remain
-blocked.
+`config/apps/approved-child-apps.json` is the allowlist. Microsoft Defender, Authenticator, Microsoft
+365 Copilot, Word, Excel, PowerPoint, OneNote, Outlook, Teams, and OneDrive are required. Edge remains
+available for self-service installation. Public stores and unknown-source installation remain blocked.
 
 Android and iOS store objects are created and assigned by the deployment engine. Two Windows
 packages are explicit prerequisites because Microsoft doesn't expose tenant-specific installers as

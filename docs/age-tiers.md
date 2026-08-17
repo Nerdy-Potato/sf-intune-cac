@@ -50,6 +50,6 @@ Birthdays are a normal, reviewed change:
 Nothing else needs editing. Group membership is calculated from the tier, so the tier is the only
 place that knowledge lives.
 
-The child tier also owns an explicit app catalog. Defender and authentication clients are required;
-the approved Microsoft 365 apps are available for self-service installation. Adding any other app is
+The child tier also owns an explicit app catalog. Defender, authentication, and the approved Microsoft
+365 apps are required; Edge remains available for self-service installation. Adding any other app is
 a reviewed change to `config/apps/approved-child-apps.json`.
