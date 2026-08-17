@@ -154,7 +154,7 @@
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.emmx",
         "minimumSupportedOperatingSystem": { "v8_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
     },
     {
       "id": "ios-defender",
