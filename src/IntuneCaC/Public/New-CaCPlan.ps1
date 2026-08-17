@@ -203,9 +203,11 @@ function New-CaCPlan {
             Add-Action -Kind 'App' -Action 'Create' -Target $app.payload.displayName -Data $app -Details @(
                 "source: $($app.source)"
             )
-            Add-Action -Kind 'AppAssignment' -Action 'Update' -Target $app.payload.displayName -Data $app -Details @(
-                ($app.assignments | ForEach-Object { "$($_.intent) $($_.group)" })
-            )
+            if (@($app.assignments).Count -gt 0) {
+                Add-Action -Kind 'AppAssignment' -Action 'Update' -Target $app.payload.displayName -Data $app -Details @(
+                    ($app.assignments | ForEach-Object { "$($_.intent) $($_.group)" })
+                )
+            }
             continue
         }
 
