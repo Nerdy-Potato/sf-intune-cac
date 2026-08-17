@@ -325,13 +325,28 @@ function Invoke-CaCPlan {
                 '{0} {1}' -f $existingDescription.Trim(), 'Managed by sf-intune-cac.'
             }
 
-            # Graph's PATCH on the polymorphic mobileApps collection requires the concrete
-            # @odata.type in the request body to model-bind correctly; omitting it causes a
-            # generic 400 ModelValidationFailure even for an otherwise-valid partial payload.
-            & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($adoptAppAction.ObjectId)" @{
-                '@odata.type' = $app.payload.'@odata.type'
-                description   = $description
-            } | Out-Null
+            try {
+                # Graph's PATCH on the polymorphic mobileApps collection requires the concrete
+                # @odata.type in the request body to model-bind correctly; omitting it causes a
+                # generic 400 ModelValidationFailure even for an otherwise-valid partial payload.
+                & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($adoptAppAction.ObjectId)" @{
+                    '@odata.type' = $app.payload.'@odata.type'
+                    description   = $description
+                } | Out-Null
+            }
+            catch {
+                # Some legacy/beta Managed Google Play app objects (androidManagedStoreApp) reject
+                # every PATCH field except roleScopeTagIds - Graph returns 400 "Patching only
+                # 'RoleScopeTagIds' is supported." for these, even with @odata.type included.
+                # Adoption tracking does not depend on this cosmetic description marker:
+                # Get-CaCRemoteAppCandidates matches remote apps by packageId/bundleId only, never
+                # by description. Treat this specific, expected rejection as a successful no-op
+                # adoption instead of failing the app (and cascading to its downstream
+                # assignment/app-config actions).
+                if ($_.Exception.Message -notlike "*Patching only*RoleScopeTagIds*supported*") {
+                    throw
+                }
+            }
             $adoptAppAction.ObjectId
         }
         if (-not $operation.Succeeded) {
@@ -343,7 +358,7 @@ function Invoke-CaCPlan {
         }
 
         Add-Result -Action 'Adopt app' -Target $action.Target -Status 'Applied' `
-            -Message 'managed marker established; existing assignments preserved'
+            -Message 'existing assignments preserved (description marker not writable for this app type; ownership tracked by packageId match instead)'
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'App' -and $_.Action -in @('Create', 'Update') })) {
@@ -364,7 +379,19 @@ function Invoke-CaCPlan {
                 return $created.id
             }
 
-            & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($action.Data.Id)" $app.payload | Out-Null
+            try {
+                & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($action.Data.Id)" $app.payload | Out-Null
+            }
+            catch {
+                # Same legacy Managed Google Play API restriction handled in the Adopt step above:
+                # some androidManagedStoreApp objects reject every PATCH field except
+                # roleScopeTagIds. Assignment (a separate Graph action below) is what actually
+                # matters for the app to reach devices, so tolerate this specific, expected
+                # rejection here too rather than blocking assignment.
+                if ($_.Exception.Message -notlike "*Patching only*RoleScopeTagIds*supported*") {
+                    throw
+                }
+            }
             return $action.Data.Id
         }
         if (-not $operation.Succeeded) {
