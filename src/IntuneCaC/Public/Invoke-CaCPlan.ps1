@@ -55,37 +55,69 @@ function Invoke-CaCPlan {
     function Wait-CaCAppPublished {
         param(
             [Parameter(Mandatory)]
-            [string] $AppId,
-
-            [Parameter(Mandatory)]
-            [string] $Target,
+            [AllowEmptyCollection()]
+            [object[]] $Apps,
 
             [Parameter()]
-            [ValidateRange(1, 10)]
-            [int] $MaxAttempts = 6
+            [int[]] $RetryDelaysSeconds = @(5, 10, 20, 40, 60, 60)
         )
 
-        for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-            try {
-                $appState = & $GraphInvoker 'GET' "deviceAppManagement/mobileApps/$AppId" $null
+        $pendingApps = @{}
+        foreach ($app in @($Apps | Where-Object { $_ -and $_.AppId -and $_.Target })) {
+            if (-not $pendingApps.ContainsKey($app.AppId)) {
+                $pendingApps[$app.AppId] = [pscustomobject]@{
+                    AppId           = $app.AppId
+                    Target          = $app.Target
+                    PublishingState = $null
+                }
             }
-            catch {
-                Write-Warning "Unable to read publishingState for app '$Target'. Proceeding with assignment. $($_.Exception.Message)"
+        }
+
+        if ($pendingApps.Count -eq 0) { return }
+
+        for ($round = 0; $round -le $RetryDelaysSeconds.Count; $round++) {
+            foreach ($pendingEntry in @($pendingApps.GetEnumerator())) {
+                $pendingApp = $pendingEntry.Value
+
+                try {
+                    $appState = & $GraphInvoker 'GET' "deviceAppManagement/mobileApps/$($pendingApp.AppId)" $null
+                }
+                catch {
+                    Write-Warning "Unable to read publishingState for app '$($pendingApp.Target)'. Proceeding with assignment. $($_.Exception.Message)"
+                    $pendingApps.Remove($pendingApp.AppId)
+                    continue
+                }
+
+                if (-not (Test-CaCHasProperty -InputObject $appState -Name 'publishingState')) {
+                    $pendingApps.Remove($pendingApp.AppId)
+                    continue
+                }
+
+                $publishingState = Get-CaCProperty -InputObject $appState -Name 'publishingState'
+                if ($publishingState -eq 'published') {
+                    $pendingApps.Remove($pendingApp.AppId)
+                    continue
+                }
+
+                $pendingApps[$pendingApp.AppId] = [pscustomobject]@{
+                    AppId           = $pendingApp.AppId
+                    Target          = $pendingApp.Target
+                    PublishingState = $publishingState
+                }
+            }
+
+            if ($pendingApps.Count -eq 0) { return }
+
+            if ($round -eq $RetryDelaysSeconds.Count) {
+                foreach ($pendingApp in @($pendingApps.Values)) {
+                    Write-Warning "App '$($pendingApp.Target)' is still in publishingState '$($pendingApp.PublishingState)' after $($RetryDelaysSeconds.Count + 1) round(s). Proceeding with assignment."
+                }
                 return
             }
 
-            if (-not (Test-CaCHasProperty -InputObject $appState -Name 'publishingState')) { return }
-
-            $publishingState = Get-CaCProperty -InputObject $appState -Name 'publishingState'
-            if ($publishingState -eq 'published') { return }
-
-            if ($attempt -eq $MaxAttempts) {
-                Write-Warning "App '$Target' is still in publishingState '$publishingState' after $MaxAttempts attempt(s). Proceeding with assignment."
-                return
-            }
-
-            $delay = 5 * [int] [Math]::Pow(2, $attempt - 1)
-            Write-Warning "App '$Target' is in publishingState '$publishingState'. Retrying in $delay second(s) (attempt $attempt of $MaxAttempts)."
+            $delay = $RetryDelaysSeconds[$round]
+            $pendingTargets = @($pendingApps.Values | ForEach-Object { $_.Target })
+            Write-Warning ("{0} app(s) still not published ({1}). Retrying in {2} second(s) (round {3} of {4})." -f $pendingApps.Count, ($pendingTargets -join ', '), $delay, ($round + 1), ($RetryDelaysSeconds.Count + 1))
             Start-Sleep -Seconds $delay
         }
     }
@@ -341,6 +373,8 @@ function Invoke-CaCPlan {
         Add-Result -Action "$($action.Action) app" -Target $action.Target -Status 'Applied' -Message ($action.Details -join '; ')
     }
 
+    $appAssignmentOperations = [System.Collections.Generic.List[object]]::new()
+    $appsToPublishCheck = [System.Collections.Generic.List[object]]::new()
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'AppAssignment' })) {
         $actionData = Get-CaCProperty -InputObject $action -Name 'Data'
         $app = if (Test-CaCHasProperty -InputObject $actionData -Name 'App') {
@@ -349,13 +383,9 @@ function Invoke-CaCPlan {
         else {
             $actionData
         }
-        if ($app -and ($blockedAppIds.ContainsKey($app.id) -or $failedAppIds.ContainsKey($app.id))) {
-            Add-Result -Action 'Assign app' -Target $action.Target -Status 'Failed' `
-                -Message 'the app was skipped or failed in the reviewed plan'
-            continue
-        }
 
-        $appId = if ($appIds.ContainsKey($app.id)) {
+        $appBlockedOrFailed = $app -and ($blockedAppIds.ContainsKey($app.id) -or $failedAppIds.ContainsKey($app.id))
+        $appId = if ($app -and $appIds.ContainsKey($app.id)) {
             $appIds[$app.id]
         }
         elseif (Test-CaCHasProperty -InputObject $actionData -Name 'Id') {
@@ -365,13 +395,45 @@ function Invoke-CaCPlan {
             $null
         }
 
+        $shouldAssign = $false
+        if (-not $appBlockedOrFailed -and $appId) {
+            $shouldAssign = $PSCmdlet.ShouldProcess($action.Target, 'Assign app')
+            if ($shouldAssign) {
+                $null = $appsToPublishCheck.Add([pscustomobject]@{
+                        AppId  = $appId
+                        Target = $action.Target
+                    })
+            }
+        }
+
+        $null = $appAssignmentOperations.Add([pscustomobject]@{
+                Action             = $action
+                ActionData         = $actionData
+                App                = $app
+                AppBlockedOrFailed = [bool] $appBlockedOrFailed
+                AppId              = $appId
+                ShouldAssign       = [bool] $shouldAssign
+            })
+    }
+
+    Wait-CaCAppPublished -Apps @($appsToPublishCheck)
+
+    foreach ($operation in $appAssignmentOperations) {
+        $action = $operation.Action
+        $actionData = $operation.ActionData
+        $app = $operation.App
+        $appId = $operation.AppId
+        if ($operation.AppBlockedOrFailed) {
+            Add-Result -Action 'Assign app' -Target $action.Target -Status 'Failed' `
+                -Message 'the app was skipped or failed in the reviewed plan'
+            continue
+        }
+
         if (-not $appId) {
             Add-Result -Action 'Assign app' -Target $action.Target -Status 'Failed' -Message 'app id could not be resolved'
             continue
         }
-        if (-not $PSCmdlet.ShouldProcess($action.Target, 'Assign app')) { continue }
-
-        Wait-CaCAppPublished -AppId $appId -Target $action.Target
+        if (-not $operation.ShouldAssign) { continue }
 
         try {
             $assignments = @($app.assignments | ForEach-Object {
