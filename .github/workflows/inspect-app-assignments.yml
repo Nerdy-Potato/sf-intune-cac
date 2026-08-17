@@ -1,0 +1,54 @@
+name: Inspect Intune app assignments
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_ids:
+        description: 'Comma-separated deviceAppManagement/mobileApps object ids to inspect'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: inspect-app-assignments
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: List assignments for specific app objects
+    runs-on: ubuntu-latest
+    environment: plan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_PLAN_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: List assignments
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: |
+          Set-StrictMode -Version Latest
+          $appIds = @(
+            '${{ inputs.app_ids }}'.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries) |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+
+          if (-not $appIds) {
+            throw 'No app ids were provided. Pass a comma-separated app_ids input.'
+          }
+
+          ./scripts/bootstrap/Get-CaCAppAssignments.ps1 -AppId $appIds
