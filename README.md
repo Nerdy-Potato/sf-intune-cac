@@ -19,11 +19,14 @@ tenant that a human has not first seen as a plan**.
 2. Open a pull request. **CI** validates the schemas and the tenant safety rules offline, and
    **Plan** signs in with a *read-only* identity and comments the exact diff on the pull request.
 3. Someone reads the plan and approves the pull request.
-4. Merging to `main` runs **Deploy**, which is gated behind the `production` GitHub environment and
-   its required reviewer. Only that workflow holds a write credential.
+4. Merging to `main` runs **Deploy**. Before it reaches the `production` GitHub environment, Deploy
+   verifies that the commit is the merge commit of that reviewed pull request and that its exact
+   head commit passed **Plan**. The environment's required reviewer is still the final write gate.
+   Only Deploy holds a write credential.
 
-Nothing else has permission to write to the tenant. Deletions are never carried out unless a human
-explicitly starts the deployment with `allow_delete`.
+Nothing else has permission to write to the tenant. A manually dispatched Deploy must select a
+reviewed commit on `main`; branches and tags are rejected. Deletions are never carried out unless a
+human explicitly starts that deployment with `allow_delete`.
 
 ## Layout
 

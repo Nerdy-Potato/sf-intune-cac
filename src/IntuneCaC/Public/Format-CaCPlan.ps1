@@ -17,7 +17,8 @@ function Format-CaCPlan {
     process { foreach ($item in @($Plan)) { $items.Add($item) } }
 
     end {
-        $changes = @($items | Where-Object { $_.Action -notin @('NoChange', 'Skip') })
+        $changes = @($items | Where-Object { $_.Action -ne 'NoChange' })
+        $blocked = @($items | Where-Object { $_.Action -in @('Skip', 'Prerequisite') })
 
         $lines = [System.Collections.Generic.List[string]]::new()
         $lines.Add('## Intune configuration plan')
@@ -31,6 +32,12 @@ function Format-CaCPlan {
         if ($items | Where-Object { $_.Action -eq 'Delete' }) {
             $lines.Add('> [!WARNING]')
             $lines.Add('> This plan contains deletions. They are only carried out when the deployment is run with `allow_delete`.')
+            $lines.Add('')
+        }
+
+        if ($blocked) {
+            $lines.Add('> [!CAUTION]')
+            $lines.Add('> This plan contains skipped or prerequisite actions. Deployment is blocked until they are resolved.')
             $lines.Add('')
         }
 

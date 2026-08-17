@@ -1,6 +1,6 @@
 # Squad Team
 
-> x3nc0n-fluffy-tribble
+> sf-intune-cac
 
 ## Coordinator
 
@@ -12,42 +12,19 @@
 
 | Name | Role | Charter | Status |
 |------|------|---------|--------|
-
-
-## Coding Agent
-
-<!-- copilot-auto-assign: false -->
-
-| Name | Role | Charter | Status |
-|------|------|---------|--------|
-| @copilot | Coding Agent | — | 🤖 Coding Agent |
-
-### Capabilities
-
-**🟢 Good fit — auto-route when enabled:**
-- Bug fixes with clear reproduction steps
-- Test coverage (adding missing tests, fixing flaky tests)
-- Lint/format fixes and code style cleanup
-- Dependency updates and version bumps
-- Small isolated features with clear specs
-- Boilerplate/scaffolding generation
-- Documentation fixes and README updates
-
-**🟡 Needs review — route to @copilot but flag for squad member PR review:**
-- Medium features with clear specs and acceptance criteria
-- Refactoring with existing test coverage
-- API endpoint additions following established patterns
-- Migration scripts with well-defined schemas
-
-**🔴 Not suitable — route to squad member instead:**
-- Architecture decisions and system design
-- Multi-system integration requiring coordination
-- Ambiguous requirements needing clarification
-- Security-critical changes (auth, encryption, access control)
-- Performance-critical paths requiring benchmarking
-- Changes requiring cross-team discussion
+| Morpheus | Lead & Architecture | .squad/agents/morpheus/charter.md | Active |
+| Trinity | Intune Graph Engineer | .squad/agents/trinity/charter.md | Active |
+| Tank | CI/CD Deployment Engineer | .squad/agents/tank/charter.md | Active |
+| Switch | QA & Test Engineer | .squad/agents/switch/charter.md | Active |
+| Mouse | Security & Policy Engineer | .squad/agents/mouse/charter.md | Active |
+| Scribe | Session Logger | .squad/agents/scribe/charter.md | Active |
+| Ralph | Work Monitor | .squad/agents/ralph/charter.md | Active |
+| Rai | RAI Reviewer | .squad/agents/Rai/charter.md | Active |
+| Fact Checker | Fact Checker | .squad/agents/fact-checker/charter.md | Active |
 
 ## Project Context
 
-- **Project:** x3nc0n-fluffy-tribble
-- **Created:** 2026-08-17
+- **Owner:** John Spaid
+- **Project:** Config-as-code for a production Microsoft Intune and Entra tenant, with offline validation, read-only planning, reviewed pull requests, and gated deployment.
+- **Stack:** PowerShell, Microsoft Graph, JSON Schema, Pester, GitHub Actions
+- **Created:** 2026-08-16T21:47:40.611-05:00

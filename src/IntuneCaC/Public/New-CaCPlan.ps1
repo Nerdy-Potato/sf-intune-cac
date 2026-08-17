@@ -30,13 +30,22 @@ function New-CaCPlan {
     $marker = $Configuration.Tenant.managedMarker
 
     function Add-Action {
-        param([string] $Kind, [string] $Action, [string] $Target, [string[]] $Details = @(), $Data)
+        param(
+            [string] $Kind,
+            [string] $Action,
+            [string] $Target,
+            [string[]] $Details = @(),
+            $Data,
+            [string] $ObjectId
+        )
+
         $actions.Add([pscustomobject]@{
                 Kind    = $Kind
                 Action  = $Action
                 Target  = $Target
                 Details = $Details
                 Data    = $Data
+                ObjectId = $ObjectId
             })
     }
 
@@ -53,10 +62,17 @@ function New-CaCPlan {
             continue
         }
 
+        if (-not (Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix)) {
+            Add-Action -Kind 'Group' -Action 'Skip' -Target $group.displayName -Data $group -Details @(
+                'an unmanaged group already uses this display name; refusing to take it over'
+            )
+            continue
+        }
+
         $groupObjectIds[$group.id] = $remote.id
 
         if ($group.ContainsKey('memberType') -and $group.memberType -eq 'device') {
-            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group
+            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group -ObjectId $remote.id
             continue
         }
 
@@ -72,13 +88,14 @@ function New-CaCPlan {
 
         if ($details) {
             Add-Action -Kind 'GroupMembership' -Action 'Update' -Target $group.displayName -Details $details -Data ([pscustomobject]@{
-                    GroupId = $remote.id
-                    Add     = $toAdd
-                    Remove  = $toRemove
-                })
+                    GroupKey = $group.id
+                    GroupId  = $remote.id
+                    Add      = $toAdd
+                    Remove   = $toRemove
+                }) -ObjectId $remote.id
         }
         else {
-            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group
+            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group -ObjectId $remote.id
         }
     }
 
@@ -86,6 +103,13 @@ function New-CaCPlan {
     $appObjectIds = @{}
     foreach ($app in $Configuration.Apps) {
         $remote = Find-CaCRemoteApp -App $app -RemoteApps $remoteApps
+
+        if ($remote -and -not (Test-CaCManagedObject -Object $remote -ManagedMarker 'Managed by sf-intune-cac.')) {
+            Add-Action -Kind 'App' -Action 'Skip' -Target $app.payload.displayName -Data $app -Details @(
+                'an unmanaged app already uses this package, bundle, or display name; refusing to take it over'
+            )
+            continue
+        }
 
         if (-not $remote) {
             if ($app.source -eq 'existing') {
@@ -113,7 +137,10 @@ function New-CaCPlan {
                 })
         }
         else {
-            Add-Action -Kind 'App' -Action 'NoChange' -Target $app.payload.displayName
+            Add-Action -Kind 'App' -Action 'NoChange' -Target $app.payload.displayName -Data ([pscustomobject]@{
+                    App = $app
+                    Id  = $remote.id
+                })
         }
 
         $assignmentDrift = Get-CaCAppAssignmentDrift -App $app -RemoteId $remote.id -GroupObjectIds $groupObjectIds -GraphInvoker $GraphInvoker
@@ -150,6 +177,13 @@ function New-CaCPlan {
                 continue
             }
 
+            if (-not (Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix)) {
+                Add-Action -Kind 'Policy' -Action 'Skip' -Target $policy.payload.displayName -Data $policy -Details @(
+                    'an unmanaged policy already uses this display name; refusing to take it over'
+                )
+                continue
+            }
+
             $targetResolutionError = $null
             $desiredPayload = try {
                 Get-CaCPolicyPayload -Policy $policy -AppObjectIds $appObjectIds
@@ -172,7 +206,10 @@ function New-CaCPlan {
                     })
             }
             else {
-                Add-Action -Kind 'Policy' -Action 'NoChange' -Target $policy.payload.displayName
+                Add-Action -Kind 'Policy' -Action 'NoChange' -Target $policy.payload.displayName -Data ([pscustomobject]@{
+                        Policy = $policy
+                        Id     = $remote.id
+                    })
             }
 
             $assignmentDrift = Get-CaCAssignmentDrift -Policy $policy -RemoteId $remote.id -Endpoint $endpoint -GroupObjectIds $groupObjectIds -GraphInvoker $GraphInvoker

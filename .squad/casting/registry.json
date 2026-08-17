@@ -1,3 +1,39 @@
 {
-  "agents": {}
+  "agents": {
+    "lead": {
+      "persistent_name": "Morpheus",
+      "universe": "The Matrix",
+      "created_at": "2026-08-16T21:47:40.611-05:00",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "intune-graph-engineer": {
+      "persistent_name": "Trinity",
+      "universe": "The Matrix",
+      "created_at": "2026-08-16T21:47:40.611-05:00",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "cicd-deployment-engineer": {
+      "persistent_name": "Tank",
+      "universe": "The Matrix",
+      "created_at": "2026-08-16T21:47:40.611-05:00",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "qa-test-engineer": {
+      "persistent_name": "Switch",
+      "universe": "The Matrix",
+      "created_at": "2026-08-16T21:47:40.611-05:00",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "security-policy-engineer": {
+      "persistent_name": "Mouse",
+      "universe": "The Matrix",
+      "created_at": "2026-08-16T21:47:40.611-05:00",
+      "legacy_named": false,
+      "status": "active"
+    }
+  }
 }

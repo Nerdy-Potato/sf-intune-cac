@@ -7,6 +7,7 @@ on:
       - 'src/**'
       - 'scripts/**'
       - '.github/workflows/plan.yml'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -71,26 +72,37 @@ jobs:
             const marker = '<!-- intune-cac-plan -->';
             const body = `${marker}\n${fs.readFileSync('out/plan.md', 'utf8')}`;
 
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
+            try {
+              const reviews = await github.paginate(
+                github.rest.pulls.listReviews,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  per_page: 100,
+                }
+              );
+              const existing = reviews.find(review => review.body?.startsWith(marker));
 
-            const existing = comments.find(c => c.body.startsWith(marker));
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
+              if (existing) {
+                await github.rest.pulls.updateReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  review_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  body,
+                  event: 'COMMENT',
+                });
+              }
+            } catch (error) {
+              core.setFailed(
+                `Failed to publish the tenant plan on pull request #${context.issue.number}: ${error.message}`
+              );
             }

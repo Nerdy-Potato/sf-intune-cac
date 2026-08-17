@@ -21,7 +21,7 @@ pull request ──► CI (offline)          schemas + safety rules + Pester
                           │
                      human review
                           │
-merge to main ──► Deploy (read-write app, production environment, required reviewer)
+merge to main ──► Deploy (reviewed plan artifact, read-write app, production environment, required reviewer)
 nightly ─────────► Drift (read-only app) fails if the tenant stopped matching the repo
 ```
 
@@ -34,7 +34,10 @@ Two Entra applications, not one:
 
 Because the write credential is bound to the `production` environment subject, a pull request -
 including one that edits a workflow file - cannot obtain it. The environment's required reviewer is
-the approval gate.
+the final approval gate. Deploy also rejects commits that are not the merge commit of an approved
+pull request with a successful Plan run and unblocked plan artifact for that pull request's exact
+head commit. Manual dispatches
+must therefore select a reviewed commit on `main`; arbitrary branches and tags cannot apply.
 
 Neither application has a client secret. Both authenticate by exchanging the workflow's short-lived
 GitHub OIDC token, so there is no credential in GitHub to leak or rotate.
@@ -63,6 +66,12 @@ Objects are matched by `displayName`, which is why validation rejects duplicates
 the identity key. Renaming a policy is therefore a delete-and-create, not a rename, and the plan
 shows it as such.
 
+Matching is also ownership-aware. A matching group or policy must carry both the configured managed
+marker and the repository name prefix; apps must carry the managed marker. If an object with the
+same identity is unmanaged, the plan records a skipped conflict instead of updating it or creating
+a duplicate. Apply treats that skipped action as incomplete, so deployment cannot report success
+until the conflict is reviewed.
+
 Drift comparison covers scalar properties and arrays of primitives. Nested objects - the scheduled
 action tree on a compliance policy, for example - carry server-generated ids that would produce
 permanent false drift, so they are re-sent on every write instead of being diffed. The practical
@@ -89,8 +98,15 @@ throw on any write, so planning cannot mutate the tenant even if the code is wro
 ## Ordering
 
 `Invoke-CaCPlan` applies in a fixed order: create groups, reconcile membership, write policies,
-then assign. Assignment targets therefore always exist by the time a policy is assigned, which is
-the failure mode a naive implementation hits on a first run against an empty tenant.
+then assign. It uses only ids carried by the reviewed plan or returned by creates; it never
+rediscovers ids from the live tenant. Assignment targets therefore always exist by the time a
+policy is assigned, which is the failure mode a naive implementation hits on a first run against
+an empty tenant.
+
+Each write action records `Applied`, `Skipped`, or `Failed`. Graph write errors are captured with
+their action context, and the deployment entry point fails if any action is skipped or failed.
+The Graph client never retries `POST`: a timeout can happen after Graph accepted a create, and
+retrying it could create a duplicate. Safe read/update/delete retries remain available.
 
 ## Adding a policy type
 

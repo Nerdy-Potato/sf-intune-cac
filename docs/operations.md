@@ -6,7 +6,19 @@
 2. **CI** validates schemas and safety rules offline and runs the tests. **Plan** comments the diff.
 3. Read the plan. In particular read the *assignment* rows: a one-line edit that changes who a
    policy targets is the change most likely to interrupt somebody's day.
-4. Merge. Approve the `production` deployment.
+4. Merge. Deploy verifies the merged commit against the reviewed pull request, downloads that
+   pull request's exact `plan` artifact, and rejects missing, blocked, or mismatched plan identity
+   before asking for approval in the `production` environment.
+
+An apply is successful only when every requested action is applied. Unmanaged identity conflicts,
+missing prerequisites, and write failures are reported in the applied plan and fail the deployment;
+review the message before retrying. `POST` requests are not automatically retried because a lost
+response may follow a successful create. Re-running the plan first discovers the object and avoids
+creating a duplicate.
+
+Deploy never regenerates a live plan with the write credential. Apply consumes only the reviewed
+artifact, whose commit and deterministic action hash are verified before any tenant connection is
+opened.
 
 Run the same checks locally before pushing:
 
@@ -33,8 +45,9 @@ then widen the assignment in a second pull request.
 ## Deletions
 
 The plan reports objects that this repository owns but no longer defines. They are **not** deleted
-by a normal deployment. To carry them out, run the **Deploy** workflow manually with `allow_delete`
-checked, after reading the plan.
+by a normal deployment. To carry them out, select the reviewed merge commit on `main` when manually
+starting **Deploy**, check `allow_delete`, and approve the `production` environment after reading
+the plan. Dispatching from another branch or tag is rejected.
 
 Objects outside the managed namespace - anything without the `CaC - ` prefix and the managed marker
 - are never proposed for deletion at all.
