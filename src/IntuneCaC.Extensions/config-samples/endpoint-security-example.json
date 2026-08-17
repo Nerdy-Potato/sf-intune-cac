@@ -1,0 +1,25 @@
+{
+  "$schema": "../schemas/policy.extended.schema.json",
+  "comment": [
+    "EXAMPLE ONLY - illustrates the endpointSecurityIntents shape for this reference module.",
+    "Not a real tenant scenario. Do not deploy without review - see DECISIONS.md."
+  ],
+  "name": "example-endpoint-security-placeholder",
+  "resource": "endpointSecurityIntents",
+  "enabled": false,
+  "templateId": "example-template-id-placeholder-not-a-real-graph-template",
+  "assignments": [
+    { "group": "sg-example-placeholder", "intent": "include" }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceManagementIntent",
+    "displayName": "CaC - Example Endpoint Security Placeholder",
+    "description": "Managed by sf-intune-cac (reference implementation - not deployed). EXAMPLE ONLY.",
+    "settingsDelta": [
+      {
+        "definitionId": "example_definitionId_placeholder",
+        "valueJson": "true"
+      }
+    ]
+  }
+}

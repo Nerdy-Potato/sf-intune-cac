@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/policy.extended.schema.json",
+  "comment": [
+    "EXAMPLE ONLY - illustrates the assignmentFilters shape for this reference module.",
+    "Filters have no assignment of their own (AssignmentModel = None); they exist to be",
+    "referenced by id/type from other resources' assignment targets. Not a real tenant scenario.",
+    "Do not deploy without review - see DECISIONS.md."
+  ],
+  "name": "example-assignment-filter-placeholder",
+  "resource": "assignmentFilters",
+  "enabled": false,
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceAndAppManagementAssignmentFilter",
+    "displayName": "CaC - Example Assignment Filter Placeholder",
+    "description": "Managed by sf-intune-cac (reference implementation - not deployed). EXAMPLE ONLY.",
+    "rule": "(device.manufacturer -eq \"ExamplePlaceholder\")"
+  }
+}

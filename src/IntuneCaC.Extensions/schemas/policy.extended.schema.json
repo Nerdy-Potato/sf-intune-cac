@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Nerdy-Potato/sf-intune-cac/src/IntuneCaC.Extensions/schemas/policy.extended.schema.json",
+  "title": "Extended (reference implementation) Intune policy definition - staged, not deployed",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "resource", "payload"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "comment": { "type": ["string", "array"] },
+    "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "resource": {
+      "type": "string",
+      "enum": [
+        "settingsCatalogPolicies",
+        "endpointSecurityIntents",
+        "conditionalAccessPolicies",
+        "assignmentFilters",
+        "proactiveRemediationScripts"
+      ]
+    },
+    "enabled": { "type": "boolean" },
+    "allowEnabledState": {
+      "type": "boolean",
+      "description": "Conditional Access only. Must be explicitly true to permit state=enabled instead of the safe default enabledForReportingButNotEnforced. See DECISIONS.md."
+    },
+    "templateId": {
+      "type": "string",
+      "description": "endpointSecurityIntents only. Required: intents are created by instantiating a template, not by posting the object directly."
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["group", "intent"],
+        "properties": {
+          "group": { "type": "string", "minLength": 1 },
+          "intent": { "type": "string", "enum": ["include", "exclude"] }
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "required": ["@odata.type", "description"],
+      "properties": {
+        "@odata.type": { "type": "string", "pattern": "^#microsoft\\.graph\\." },
+        "displayName": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

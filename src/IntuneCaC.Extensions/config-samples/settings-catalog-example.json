@@ -1,0 +1,31 @@
+{
+  "$schema": "../schemas/policy.extended.schema.json",
+  "comment": [
+    "EXAMPLE ONLY - illustrates the settingsCatalogPolicies shape for this reference module.",
+    "Not a real tenant scenario. Do not deploy without review - see DECISIONS.md."
+  ],
+  "name": "example-settings-catalog-placeholder",
+  "resource": "settingsCatalogPolicies",
+  "enabled": false,
+  "assignments": [
+    { "group": "sg-example-placeholder", "intent": "include" }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceManagementConfigurationPolicy",
+    "name": "CaC - Example Settings Catalog Placeholder",
+    "description": "Managed by sf-intune-cac (reference implementation - not deployed). EXAMPLE ONLY.",
+    "platforms": "windows10",
+    "technologies": "mdm",
+    "settings": [
+      {
+        "settingInstance": {
+          "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+          "settingDefinitionId": "example_settingDefinitionId_placeholder",
+          "choiceSettingValue": {
+            "value": "example_choice_placeholder_enabled"
+          }
+        }
+      }
+    ]
+  }
+}

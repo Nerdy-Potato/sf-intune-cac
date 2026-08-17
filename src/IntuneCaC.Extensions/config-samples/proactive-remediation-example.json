@@ -1,0 +1,24 @@
+{
+  "$schema": "../schemas/policy.extended.schema.json",
+  "comment": [
+    "EXAMPLE ONLY - illustrates the proactiveRemediationScripts shape for this reference module.",
+    "Script bodies are base64; the placeholders below decode to short comment-only stubs, never",
+    "anything that executes real logic. Not a real tenant scenario. Do not deploy without review -",
+    "see DECISIONS.md."
+  ],
+  "name": "example-proactive-remediation-placeholder",
+  "resource": "proactiveRemediationScripts",
+  "enabled": false,
+  "assignments": [
+    { "group": "sg-example-placeholder", "intent": "include" }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceHealthScript",
+    "displayName": "CaC - Example Proactive Remediation Placeholder",
+    "description": "Managed by sf-intune-cac (reference implementation - not deployed). EXAMPLE ONLY.",
+    "publisher": "sf-intune-cac",
+    "runAsAccount": "system",
+    "detectionScriptContent": "IyBFeGFtcGxlIHBsYWNlaG9sZGVyIGRldGVjdGlvbiBzY3JpcHQuIE5vdCByZWFsLg==",
+    "remediationScriptContent": "IyBFeGFtcGxlIHBsYWNlaG9sZGVyIHJlbWVkaWF0aW9uIHNjcmlwdC4gTm90IHJlYWwu"
+  }
+}

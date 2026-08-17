@@ -1,0 +1,34 @@
+{
+  "$schema": "../schemas/policy.extended.schema.json",
+  "comment": [
+    "EXAMPLE ONLY - illustrates the conditionalAccessPolicies shape and mandatory safety fields.",
+    "state defaults to enabledForReportingButNotEnforced; allowEnabledState must be set explicitly",
+    "and true to ever request state=enabled. conditions.users.excludeGroups MUST include the",
+    "break-glass group id passed to New-CaCExtendedPlan/-Test-CaCExtendedConfiguration, or the",
+    "plan will report this policy as Blocked rather than Create/Update. Not a real tenant scenario.",
+    "Do not deploy without review - see DECISIONS.md."
+  ],
+  "name": "example-conditional-access-placeholder",
+  "resource": "conditionalAccessPolicies",
+  "enabled": false,
+  "allowEnabledState": false,
+  "payload": {
+    "@odata.type": "#microsoft.graph.conditionalAccessPolicy",
+    "displayName": "CaC - Example Conditional Access Placeholder",
+    "description": "Managed by sf-intune-cac (reference implementation - not deployed). EXAMPLE ONLY.",
+    "state": "enabledForReportingButNotEnforced",
+    "conditions": {
+      "users": {
+        "includeGroups": ["example-target-group-object-id-placeholder"],
+        "excludeGroups": ["example-breakglass-group-object-id-placeholder"]
+      },
+      "applications": {
+        "includeApplications": ["All"]
+      }
+    },
+    "grantControls": {
+      "operator": "OR",
+      "builtInControls": ["mfa"]
+    }
+  }
+}
