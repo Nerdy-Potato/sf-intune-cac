@@ -99,6 +99,15 @@
       "accountType": "firecall",
       "tier": "excluded",
       "ageTierConfirmed": true
+    },
+    {
+      "id": "bobjohnson",
+      "displayName": "Break Glass 2",
+      "upnLocalPart": "bobjohnson",
+      "domain": "fallback",
+      "accountType": "firecall",
+      "tier": "excluded",
+      "ageTierConfirmed": true
     }
   ]
 }

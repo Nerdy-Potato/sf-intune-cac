@@ -77,5 +77,5 @@ compliance data against the old object does not.
 
 ## Break-glass accounts
 
-`mauricemoss` is excluded from everything by design, and validation fails if
+`mauricemoss` and `bobjohnson` are excluded from everything by design, and validation fails if
 they ever end up in a group that has policy assigned to it. Do not "tidy" them into a group.

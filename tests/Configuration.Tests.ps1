@@ -18,7 +18,7 @@ Describe 'Repository configuration' {
     It 'defines every account named by the tenant owner' {
         $expected = @(
             'john', 'robin', 'samantha', 'adalynn', 'lucas', 'emmerick', 'broderick', 'cullen',
-            'johnspaid', 'mauricemoss'
+            'johnspaid', 'mauricemoss', 'bobjohnson'
         )
 
         ($script:Config.Users.id | Sort-Object) | Should -Be ($expected | Sort-Object)
