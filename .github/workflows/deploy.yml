@@ -70,16 +70,26 @@ jobs:
               core.setFailed('Recovery deployment requires confirm_deploy=true.');
               return;
             }
-            const pullRequests = await github.paginate(
-              github.rest.repos.listPullRequestsAssociatedWithCommit,
+            // Note: github.rest.repos.listPullRequestsAssociatedWithCommit only finds PRs
+            // whose *original* commits are being looked up. A squash-merge commit landing
+            // on main is a brand-new synthetic commit that was never part of the PR's own
+            // commit list, so that endpoint reliably returns [] for it -- this repository
+            // always squash-merges (see gh pr merge --squash usage), so that lookup would
+            // never succeed for the non-recovery (push-triggered) path. Instead, list
+            // closed pull requests directly and match on the field we actually need.
+            const closedPullRequests = await github.paginate(
+              github.rest.pulls.list,
               {
                 owner,
                 repo,
-                commit_sha: recovery ? '${{ inputs.reviewed_sha }}' : sha,
+                state: 'closed',
+                base: 'main',
+                sort: 'updated',
+                direction: 'desc',
                 per_page: 100
               }
             );
-            const pullRequest = pullRequests.find(pr =>
+            const pullRequest = closedPullRequests.find(pr =>
               pr.merged_at &&
               (recovery
                 ? pr.head.sha === '${{ inputs.reviewed_sha }}'
