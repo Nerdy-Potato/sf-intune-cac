@@ -6,6 +6,39 @@
   "environment": "production",
   "managedMarker": "Managed by sf-intune-cac. Do not edit in the portal.",
   "namePrefix": "CaC",
+  "adoption": {
+    "oneTime": true,
+    "enabled": true,
+    "groups": [
+      {
+        "id": "sg-autopilot-device-preparation-child",
+        "displayName": "CaC-Autopilot-DevicePreparation-Child",
+        "securityEnabled": true,
+        "mailEnabled": false,
+        "groupTypes": []
+      }
+    ],
+    "apps": [
+      {
+        "id": "android-authenticator",
+        "displayName": "Microsoft Authenticator",
+        "odataType": "#microsoft.graph.managedAndroidStoreApp",
+        "identity": {
+          "kind": "packageId",
+          "value": "com.azure.authenticator"
+        }
+      },
+      {
+        "id": "ios-authenticator",
+        "displayName": "Microsoft Authenticator",
+        "odataType": "#microsoft.graph.iosStoreApp",
+        "identity": {
+          "kind": "bundleId",
+          "value": "com.microsoft.azureauthenticator"
+        }
+      }
+    ]
+  },
   "safety": {
     "forbidAllUsersAssignment": true,
     "forbidAllDevicesAssignment": true,

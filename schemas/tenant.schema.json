@@ -14,6 +14,52 @@
     "environment": { "type": "string", "enum": ["production"] },
     "managedMarker": { "type": "string", "minLength": 10 },
     "namePrefix": { "type": "string", "minLength": 1 },
+    "adoption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["oneTime", "enabled", "groups", "apps"],
+      "properties": {
+        "oneTime": { "type": "boolean" },
+        "enabled": { "type": "boolean" },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "displayName", "securityEnabled", "mailEnabled", "groupTypes"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "displayName": { "type": "string", "minLength": 1 },
+              "securityEnabled": { "type": "boolean" },
+              "mailEnabled": { "type": "boolean" },
+              "groupTypes": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "displayName", "odataType", "identity"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "displayName": { "type": "string", "minLength": 1 },
+              "odataType": { "type": "string", "pattern": "^#microsoft\\.graph\\." },
+              "identity": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "value"],
+                "properties": {
+                  "kind": { "type": "string", "enum": ["packageId", "bundleId"] },
+                  "value": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "safety": {
       "type": "object",
       "additionalProperties": false,
