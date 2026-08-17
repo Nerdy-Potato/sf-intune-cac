@@ -21,14 +21,20 @@ It creates, idempotently:
 
 | Application | Graph application roles | Federated subjects |
 | --- | --- | --- |
-| `sf-intune-cac-plan` | `DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `DeviceManagementServiceConfig.Read.All`, `Group.Read.All`, `User.Read.All` | `repo:Nerdy-Potato/sf-intune-cac:pull_request`, `repo:Nerdy-Potato/sf-intune-cac:environment:plan` |
-| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `DeviceManagementServiceConfig.ReadWrite.All`, `Group.ReadWrite.All`, `User.Read.All` | `repo:Nerdy-Potato/sf-intune-cac:environment:production` |
+| `sf-intune-cac-plan` | `DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `DeviceManagementServiceConfig.Read.All`, `Group.Read.All`, `User.Read.All` | Legacy and numeric-ID subjects for `pull_request` and `environment:plan` |
+| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `DeviceManagementServiceConfig.ReadWrite.All`, `Group.ReadWrite.All`, `User.Read.All` | Legacy and numeric-ID subjects for `environment:production` |
 
 No client secrets are created. Both applications authenticate by exchanging GitHub's short-lived
 OIDC token, so there is nothing stored in GitHub and nothing to rotate.
 
 Re-running the script is safe: it reconciles rather than duplicating. Re-run it after pulling a
 change that adds a Graph role; existing applications are updated in place.
+
+GitHub may present OIDC subjects with numeric organization and repository IDs (for example,
+`repo:Nerdy-Potato@317626810/sf-intune-cac@1336208931:environment:plan`). The bootstrap defaults
+to this repository's IDs and creates both numeric-ID and legacy subjects for compatibility. If the
+repository is moved or renamed, pass its current IDs with `-GitHubOrganizationId` and
+`-GitHubRepositoryId`.
 
 ## 2. Set the repository variables
 

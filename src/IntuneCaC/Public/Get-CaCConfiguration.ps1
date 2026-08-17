@@ -40,6 +40,11 @@ function Get-CaCConfiguration {
     }
 
     foreach ($group in $groups) {
+        if ($group.ContainsKey('memberType') -and $group.memberType -eq 'device') {
+            $group['members'] = @()
+            continue
+        }
+
         $matched = @(
             switch ($group.membership.source) {
                 'tier' { $users | Where-Object { $_.tier -in $group.membership.values } }

@@ -8,8 +8,8 @@
   "name": "windows-update-ring-broad",
   "resource": "deviceConfigurations",
   "assignments": [
-    { "group": "sg-productivity-all", "intent": "include" },
-    { "group": "sg-tier-adult", "intent": "exclude" }
+    { "group": "sg-tier-child", "intent": "include" },
+    { "group": "sg-tier-teen", "intent": "include" }
   ],
   "payload": {
     "@odata.type": "#microsoft.graph.windowsUpdateForBusinessConfiguration",

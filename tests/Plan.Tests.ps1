@@ -71,10 +71,16 @@ BeforeAll {
                     })
             }
 
-            foreach ($policy in $script:Config.Policies | Where-Object { $_.targetApps }) {
-                $remotePolicy = $state.Policies[$policy.resource] |
-                    Where-Object displayName -EQ $policy.payload.displayName |
-                    Select-Object -First 1
+            foreach ($policy in $script:Config.Policies | Where-Object {
+                    $null -ne $_.PSObject.Properties['targetApps']
+                }) {
+                $policyObjects = @($state.Policies[$policy.resource])
+                $policyIndex = 0
+                while ($policyIndex -lt $policyObjects.Count -and
+                    $policyObjects[$policyIndex].displayName -ne $policy.payload.displayName) {
+                    $policyIndex++
+                }
+                $remotePolicy = $policyObjects[$policyIndex]
                 $targetIds = @($policy.targetApps | ForEach-Object {
                         $targetApp = $script:Config.Apps | Where-Object id -EQ $_
                         ($state.Apps | Where-Object {
@@ -83,7 +89,9 @@ BeforeAll {
                                 $_.displayName -eq $targetApp.payload.displayName
                             } | Select-Object -First 1).id
                     })
-                $remotePolicy | Add-Member -NotePropertyName targetedMobileApps -NotePropertyValue $targetIds
+                $policyObjects[$policyIndex] = $remotePolicy | Add-Member -Force -PassThru `
+                    -NotePropertyName targetedMobileApps -NotePropertyValue $targetIds
+                $state.Policies[$policy.resource] = $policyObjects
             }
         }
 
@@ -119,7 +127,19 @@ BeforeAll {
                 }
                 default {
                     $resource = ($Uri -split '/')[-1]
-                    return [pscustomobject]@{ value = @($State.Policies[$resource]) }
+                    $objects = @($State.Policies[$resource])
+                    if ($resource -eq 'mobileAppConfigurations') {
+                        $objects = @($objects | ForEach-Object {
+                                if ($_.displayName -eq 'CaC - Android - Defender and GSA (Child)') {
+                                    $_ | Add-Member -Force -PassThru -NotePropertyName targetedMobileApps `
+                                        -NotePropertyValue @('app-1')
+                                }
+                                else {
+                                    $_
+                                }
+                            })
+                    }
+                    return [pscustomobject]@{ value = $objects }
                 }
             }
         }.GetNewClosure()
@@ -242,7 +262,7 @@ Describe 'New-CaCPlan' {
     Context 'when a member joins a tier' {
         BeforeAll {
             $script:MemberState = New-FakeTenant -InSync
-            $childGroup = $script:MemberState.Groups | Where-Object displayName -EQ 'CaC-Tier-Child'
+            $childGroup = $script:MemberState.Groups | Where-Object displayName -EQ 'CaC-Youngest-Children'
             $script:MemberState.Members[$childGroup.id] = @($script:MemberState.Members[$childGroup.id] | Select-Object -Skip 1)
 
             $script:MemberPlan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $script:MemberState)

@@ -34,8 +34,9 @@ Describe 'Repository configuration' {
         }
     }
 
-    It 'places the youngest confirmed child in the most restrictive tier' {
-        ($script:Config.Users | Where-Object id -EQ 'lucas').tier | Should -Be 'child'
+    It 'places the younger children in the teen tier' {
+        ($script:Config.Users | Where-Object id -EQ 'lucas').tier | Should -Be 'teen'
+        ($script:Config.Users | Where-Object id -EQ 'adalynn').tier | Should -Be 'teen'
     }
 
     It 'confirms the three youngest children in the child tier' {
@@ -51,9 +52,14 @@ Describe 'Repository configuration' {
         $group.membership.source | Should -Be 'explicit'
     }
 
-    It 'places the adult child in the tier with security-only controls' {
-        ($script:Config.Users | Where-Object id -EQ 'samantha').tier | Should -Be 'young-adult'
-        @($script:Config.Policies | Where-Object { $_.assignments.group -contains 'sg-tier-young-adult' }) | Should -BeNullOrEmpty
+    It 'defines one manually managed device group for each age tier' {
+        $deviceGroups = @($script:Config.Groups | Where-Object memberType -EQ 'device')
+        $deviceGroups.displayName | Should -Be @('CaC-Devices-Adult', 'CaC-Devices-Teen', 'CaC-Devices-Child')
+        $deviceGroups.members | Should -BeNullOrEmpty
+    }
+
+    It 'places Samantha in the adult tier' {
+        ($script:Config.Users | Where-Object id -EQ 'samantha').tier | Should -Be 'adult'
     }
 
     It 'gives the child tier more restrictions than the teen tier' {
@@ -70,7 +76,7 @@ Describe 'Repository configuration' {
             , $group.members | Should -BeOfType [System.Object[]]
         }
 
-        ($script:Config.Groups | Where-Object id -EQ 'sg-tier-teen').members.Count | Should -Be 0
+        ($script:Config.Groups | Where-Object id -EQ 'sg-tier-teen').members.Count | Should -Be 2
     }
 
     It 'never assigns a policy to all users or all devices' {
@@ -97,12 +103,12 @@ Describe 'Repository configuration' {
             Should -Be @('required', 'required')
     }
 
-    It 'puts the parents in a separate, earlier Windows update ring than everyone else' {
+    It 'keeps Windows update rings out of the adult tier' {
         $pilot = $script:Config.Policies | Where-Object name -EQ 'windows-update-ring-pilot'
         $broad = $script:Config.Policies | Where-Object name -EQ 'windows-update-ring-broad'
 
-        $pilot.assignments.Where({ $_.intent -eq 'include' }).group | Should -Be 'sg-tier-adult'
-        $broad.assignments.Where({ $_.intent -eq 'exclude' }).group | Should -Be 'sg-tier-adult'
+        $pilot.assignments.Where({ $_.intent -eq 'include' }).group | Should -Be 'sg-tier-child'
+        $broad.assignments.Where({ $_.intent -eq 'include' }).group | Should -Be @('sg-tier-child', 'sg-tier-teen')
         $broad.payload.qualityUpdatesDeferralPeriodInDays |
             Should -BeGreaterThan $pilot.payload.qualityUpdatesDeferralPeriodInDays
     }

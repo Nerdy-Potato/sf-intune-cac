@@ -2,7 +2,7 @@
   "$schema": "../schemas/tenant.schema.json",
   "displayName": "Nerdy Potato",
   "fallbackDomain": "nerdypotato.onmicrosoft.com",
-  "primaryDomain": null,
+  "primaryDomain": "spaid.family",
   "environment": "production",
   "managedMarker": "Managed by sf-intune-cac. Do not edit in the portal.",
   "namePrefix": "CaC",

@@ -7,7 +7,10 @@
   ],
   "name": "windows-compliance-baseline",
   "resource": "deviceCompliancePolicies",
-  "assignments": [{ "group": "sg-productivity-all", "intent": "include" }],
+  "assignments": [
+    { "group": "sg-tier-child", "intent": "include" },
+    { "group": "sg-tier-teen", "intent": "include" }
+  ],
   "payload": {
     "@odata.type": "#microsoft.graph.windows10CompliancePolicy",
     "displayName": "CaC - Windows - Compliance Baseline",
