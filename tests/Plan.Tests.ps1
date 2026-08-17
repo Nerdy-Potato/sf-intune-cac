@@ -368,7 +368,7 @@ Describe 'New-CaCPlan' {
                 -GraphInvoker (New-FakeInvoker -State $script:AdoptionState)
         }
 
-        It 'plans adoption only for the exact configured group and Authenticator identities' {
+        It 'plans adoption only for the exact configured bootstrap group' {
             $groupAction = @($script:AdoptionPlan | Where-Object {
                     $_.Kind -eq 'Group' -and $_.Target -eq 'CaC-Autopilot-DevicePreparation-Child'
                 })
@@ -381,10 +381,10 @@ Describe 'New-CaCPlan' {
                     $_.Kind -eq 'App' -and $_.Action -eq 'Adopt' -and
                     $_.Target -eq 'Microsoft Authenticator'
                 })
-            $authAdoptions.Count | Should -Be 2
+            $authAdoptions | Should -BeNullOrEmpty
             @($script:AdoptionPlan | Where-Object {
                     $_.Kind -eq 'AppAssignment' -and $_.Target -eq 'Microsoft Authenticator'
-                }).Data.PreservedAssignments.target.groupId | Should -Contain 'external-group'
+                }) | Should -BeNullOrEmpty
             $script:AdoptionPlan | Format-CaCPlan | Should -Match 'one-time adoption actions'
         }
 

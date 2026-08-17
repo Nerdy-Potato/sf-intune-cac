@@ -346,30 +346,6 @@
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
       "assignments": [{ "group": "sg-tier-child", "intent": "available" }]
-    },
-    {
-      "id": "windows-m365-apps",
-      "platform": "windows",
-      "source": "existing",
-      "payload": {
-        "@odata.type": "#microsoft.graph.officeSuiteApp",
-        "displayName": "Microsoft 365 Apps for Windows",
-        "description": "Approved Word, Excel, PowerPoint, Outlook, OneNote, Teams and OneDrive suite. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation"
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
-    },
-    {
-      "id": "windows-gsa-client",
-      "platform": "windows",
-      "source": "existing",
-      "payload": {
-        "@odata.type": "#microsoft.graph.win32LobApp",
-        "displayName": "Global Secure Access Client",
-        "description": "Required Global Secure Access client package downloaded from the tenant portal. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation"
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     }
   ]
 }

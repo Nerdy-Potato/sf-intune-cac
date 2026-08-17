@@ -18,26 +18,7 @@
         "groupTypes": []
       }
     ],
-    "apps": [
-      {
-        "id": "android-authenticator",
-        "displayName": "Microsoft Authenticator",
-        "odataType": "#microsoft.graph.managedAndroidStoreApp",
-        "identity": {
-          "kind": "packageId",
-          "value": "com.azure.authenticator"
-        }
-      },
-      {
-        "id": "ios-authenticator",
-        "displayName": "Microsoft Authenticator",
-        "odataType": "#microsoft.graph.iosStoreApp",
-        "identity": {
-          "kind": "bundleId",
-          "value": "com.microsoft.azureauthenticator"
-        }
-      }
-    ]
+    "apps": []
   },
   "safety": {
     "forbidAllUsersAssignment": true,
