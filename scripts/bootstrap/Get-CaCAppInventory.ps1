@@ -70,12 +70,19 @@ $getProperty = $module.NewBoundScriptBlock({
     })
 
 $configuration = Get-CaCConfiguration -Path (Join-Path $repoRoot 'config')
-$configuredByPackageOrBundle = @{}
+# Case-sensitive dictionaries, split by identity field: PowerShell's default @{} hashtable
+# compares string keys case-insensitively, which would silently collide an Android packageId
+# (e.g. com.microsoft.office.word) with a differently-cased iOS bundleId
+# (e.g. com.microsoft.Office.Word) and report a false type mismatch. Splitting by field also
+# guarantees we never compare across identity types, matching the switch on $App.source in
+# Get-CaCRemoteAppCandidates.
+$configuredByPackageId = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+$configuredByBundleId = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
 foreach ($app in $configuration.Apps) {
     $configuredPackageId = & $getProperty $app.payload 'packageId'
     $configuredBundleId = & $getProperty $app.payload 'bundleId'
-    $key = if ($configuredPackageId) { $configuredPackageId } elseif ($configuredBundleId) { $configuredBundleId } else { $null }
-    if ($key) { $configuredByPackageOrBundle[$key] = $app }
+    if ($configuredPackageId) { $configuredByPackageId[$configuredPackageId] = $app }
+    if ($configuredBundleId) { $configuredByBundleId[$configuredBundleId] = $app }
 }
 
 $remoteApps = @((& $graphInvoker 'GET' 'deviceAppManagement/mobileApps' $null).value | Where-Object { $_ })
@@ -83,8 +90,21 @@ $remoteApps = @((& $graphInvoker 'GET' 'deviceAppManagement/mobileApps' $null).v
 $rows = foreach ($remote in $remoteApps) {
     $packageId = & $getProperty $remote 'packageId'
     $bundleId = & $getProperty $remote 'bundleId'
-    $key = if ($packageId) { $packageId } elseif ($bundleId) { $bundleId } else { $null }
-    $configured = if ($key) { $configuredByPackageOrBundle[$key] } else { $null }
+
+    $configured = $null
+    $key = $null
+    if ($packageId -and $configuredByPackageId.ContainsKey($packageId)) {
+        $configured = $configuredByPackageId[$packageId]
+        $key = $packageId
+    }
+    elseif ($bundleId -and $configuredByBundleId.ContainsKey($bundleId)) {
+        $configured = $configuredByBundleId[$bundleId]
+        $key = $bundleId
+    }
+    else {
+        $key = if ($packageId) { $packageId } elseif ($bundleId) { $bundleId } else { $null }
+    }
+
     $desiredType = if ($configured) { $configured.payload.'@odata.type' } else { $null }
     $actualType = & $getProperty $remote '@odata.type'
 
@@ -99,10 +119,14 @@ $rows = foreach ($remote in $remoteApps) {
     }
 }
 
-$rows | Sort-Object DisplayName | Format-Table -AutoSize -Wrap
+$rows | Sort-Object DisplayName | Format-Table -AutoSize
 $mismatches = @($rows | Where-Object TypeMismatch)
 if ($mismatches) {
     Write-Host ''
     Write-Warning "$($mismatches.Count) app object(s) have a live @odata.type that does not match configuration:"
     $mismatches | ForEach-Object { Write-Warning "  $($_.DisplayName) [$($_.Id)]: actual '$($_.ActualType)' vs configured '$($_.ConfiguredType)'" }
 }
+
+Write-Host ''
+Write-Host '--- JSON (for scripted parsing) ---'
+$rows | Sort-Object DisplayName | ConvertTo-Json -Depth 4
