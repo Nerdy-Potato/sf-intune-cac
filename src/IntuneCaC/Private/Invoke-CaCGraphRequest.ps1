@@ -71,7 +71,10 @@ function Invoke-CaCGraphRequest {
                 $status = [int] $_.Exception.Response.StatusCode
             }
 
-            if ($status -notin @(429, 500, 502, 503, 504) -or $attempt -eq $MaxAttempts) { throw }
+            $transientReferenceNotFound = $status -eq 404 -and $Method -ne 'GET' -and
+                $Uri -match '/(assign|members/|targetApps)'
+            if (($status -notin @(429, 500, 502, 503, 504) -and -not $transientReferenceNotFound) -or
+                $attempt -eq $MaxAttempts) { throw }
 
             $delay = [int] [Math]::Pow(2, $attempt)
             Write-Warning "Graph returned $status for $Method $requestUri. Retrying in $delay second(s) (attempt $attempt of $MaxAttempts)."
