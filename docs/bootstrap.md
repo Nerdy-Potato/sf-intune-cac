@@ -102,7 +102,57 @@ a deployment, and Deploy rejects any commit that is not associated with a review
 Manual Deploy runs must select a commit on `main`; the workflow's reviewed-commit check rejects
 branches and tags.
 
-## 5. Confirm the tenant details
+## 5. Approve Android apps in Managed Google Play
+
+Every Android entry in `config/apps/approved-child-apps.json` uses
+`source: "managedGooglePlay"` / `@odata.type: managedAndroidStoreApp` - correctly, these are
+Managed Google Play apps, not Built-in Android apps. But Managed Google Play is Google's catalog,
+not Microsoft's: **Google requires each package to be approved through the Managed Google Play
+console before Intune can ever finish "publishing" the corresponding app object.** There is no
+Graph API or PowerShell path around this - it's an interactive, Google-side consent step, the same
+one you'd do by hand if you added the app through the Intune portal's app picker instead of this
+repository.
+
+`Invoke-CaCPlan`/`Invoke-CaCApply` create the app object via a direct
+`POST /deviceAppManagement/mobileApps` (see `Invoke-CaCPlan.ps1`). Graph accepts that create and
+the object appears in the tenant, but if the package was never approved in Managed Google Play, it
+is permanently stuck in `publishingState: processing` - not delayed, *stuck*. Retrying the deploy,
+or deleting and recreating the app object, does not help: recreating the Intune-side object doesn't
+touch Google's approval state, which is keyed to the package, not to our object.
+
+Before the first deploy that creates Android apps (or if apps are stuck in `processing` for more
+than an hour with no other explanation), approve every package once:
+
+1. Sign in to [Intune admin center](https://intune.microsoft.com) as a Global Administrator.
+2. **Apps > Android > Managed Google Play**. This opens Google's own app-search experience embedded
+   in Intune - your Intune tenant must already show an active Android Enterprise/Managed Google Play
+   connection here (it does, since child device enrollment already requires it).
+3. For each package below, search for the app, open it, and click **Approve**, then confirm the
+   default (or your preferred) approval/update settings:
+
+   | Display name | Package ID |
+   | --- | --- |
+   | Microsoft Defender | `com.microsoft.scmx` |
+   | Microsoft 365 Copilot | `com.microsoft.office.officehubrow` |
+   | Microsoft Word | `com.microsoft.office.word` |
+   | Microsoft Excel | `com.microsoft.office.excel` |
+   | Microsoft PowerPoint | `com.microsoft.office.powerpoint` |
+   | Microsoft OneNote | `com.microsoft.office.onenote` |
+   | Microsoft Outlook | `com.microsoft.office.outlook` |
+   | Microsoft Teams | `com.microsoft.teams` |
+   | Microsoft OneDrive | `com.microsoft.skydrive` |
+   | Microsoft Edge | `com.microsoft.emmx` |
+
+4. After approving all ten, trigger a sync (**Apps > Android > Managed Google Play > Sync**, or wait
+   for Intune's automatic sync). Google's own sync usually completes within minutes, not hours.
+5. Redeploy. `Get-CaCRemoteAppCandidates` matches remote apps by `packageId`, so if approval created
+   a separate, properly-synced object, the next plan will pick that one up as the existing app going
+   forward rather than creating a duplicate. If a stuck placeholder object from before approval is
+   left behind afterwards, remove it with `scripts/bootstrap/Remove-CaCStuckApp.ps1` (see the
+   `Remediate stuck Intune app objects` workflow) once the approved app is confirmed `published` and
+   assigned correctly.
+
+## 6. Confirm the tenant details
 
 Two things still need a decision from the tenant owner before the first apply:
 
@@ -111,7 +161,7 @@ Two things still need a decision from the tenant owner before the first apply:
    warns until it is set.
 2. **The unconfirmed age tiers** - see [age-tiers.md](age-tiers.md).
 
-## 6. First run
+## 7. First run
 
 Before creating a Windows Autopilot device preparation policy, establish the Microsoft-owned
 provisioning identity and assigned device group:
