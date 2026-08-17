@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Part of the per-platform migration of the child corporate-owned enrollment restriction.",
+    "See child-enrollment-restriction-android.json for the migration background.",
+    "Windows corporate-owned devices (Autopilot) only; personal-device enrollment stays blocked.",
+    "NOTE: the old single-policy schema also had a distinct 'windowsHomeSkuRestriction' field",
+    "blocking Windows Home SKU specifically. The new per-platform Graph model has no equivalent",
+    "platformType for that (enum is: allPlatforms, ios, windows, windowsPhone, android,",
+    "androidForWork, mac, linux) so that specific SKU-level block could not be migrated 1:1 and",
+    "was deliberately dropped rather than guessed at. Windows devices are still gated by this",
+    "policy's minimum OS version and personal-device block."
+  ],
+  "name": "child-enrollment-restriction-windows",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Corporate-Owned Child Devices (Windows)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 1,
+    "platformType": "windows",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": false,
+      "personalDeviceEnrollmentBlocked": true,
+      "osMinimumVersion": "10.0.19045",
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}

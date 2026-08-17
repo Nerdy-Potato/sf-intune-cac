@@ -1,0 +1,26 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Part of the per-platform migration of the child corporate-owned enrollment restriction.",
+    "See child-enrollment-restriction-android.json for the migration background.",
+    "iOS/iPadOS corporate-owned devices (ADE) only; personal-device enrollment stays blocked."
+  ],
+  "name": "child-enrollment-restriction-ios",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Corporate-Owned Child Devices (iOS)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 1,
+    "platformType": "ios",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": false,
+      "personalDeviceEnrollmentBlocked": true,
+      "osMinimumVersion": "16.0",
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Part of the per-platform migration of the child corporate-owned enrollment restriction.",
+    "Graph deprecated the old single-policy deviceEnrollmentPlatformRestrictionsConfiguration",
+    "resource ('Creating enrollment restrictions in a single policy is no longer supported') in",
+    "favor of one deviceEnrollmentPlatformRestrictionConfiguration object per platformType. See",
+    "the sibling files in this folder for the other platforms. This file blocks the legacy Android",
+    "device administrator enrollment path entirely; corporate-owned Android must use Android",
+    "Enterprise (see child-enrollment-restriction-android-for-work.json)."
+  ],
+  "name": "child-enrollment-restriction-android",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Corporate-Owned Child Devices (Android)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 1,
+    "platformType": "android",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}

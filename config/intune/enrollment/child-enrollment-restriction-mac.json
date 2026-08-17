@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Part of the per-platform migration of the child corporate-owned enrollment restriction.",
+    "See child-enrollment-restriction-android.json for the migration background.",
+    "macOS is not an approved child enrollment path; fully blocked."
+  ],
+  "name": "child-enrollment-restriction-mac",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Corporate-Owned Child Devices (macOS)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 1,
+    "platformType": "mac",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}
