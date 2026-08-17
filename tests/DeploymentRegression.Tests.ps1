@@ -9,6 +9,7 @@ BeforeAll {
     $script:DriftWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/drift.yml') -Raw
     $script:CiWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/ci.yml') -Raw
     $script:Bootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1') -Raw
+    $script:SoloRecoveryBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1') -Raw
     $script:IosGsa = Get-Content -Path (Join-Path $script:RepoRoot 'config/intune/device-configuration/ios-gsa-child.json') -Raw |
         ConvertFrom-Json
 }
@@ -160,6 +161,14 @@ Describe 'Workflow trigger and permission safety' {
 }
 
 Describe 'Bootstrap and managed-object safety' {
+    It 'documents the solo-maintainer recovery deploy inputs explicitly' {
+        $script:SoloRecoveryBootstrap | Should -Match "'workflow',\s*'run',\s*'deploy\.yml'"
+        $script:SoloRecoveryBootstrap | Should -Match "confirm_deploy=true"
+        $script:SoloRecoveryBootstrap | Should -Match 'reviewed_sha=\$CommitSha'
+        $script:SoloRecoveryBootstrap | Should -Match 'plan_run_id=\$\(\$matchingRun\.databaseId\)'
+        $script:SoloRecoveryBootstrap | Should -Match 'allow_delete=\$allowDeleteValue'
+    }
+
     It 'uses an unconditional connect rule for the iOS GSA profile' {
         @($script:IosGsa.payload.onDemandRules).action | Should -Contain 'connect'
         $script:IosGsa.payload.onDemandRules | ConvertTo-Json -Depth 10 |

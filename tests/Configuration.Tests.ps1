@@ -108,6 +108,8 @@ Describe 'Repository configuration' {
             $app.assignments.group | Should -Be @('sg-tier-child')
         }
 
+        $script:Config.Apps.id | Should -Not -Contain 'android-authenticator'
+        $script:Config.Apps.id | Should -Not -Contain 'ios-authenticator'
         ($script:Config.Apps | Where-Object id -in @('android-defender', 'ios-defender')).assignments.intent |
             Should -Be @('required', 'required')
     }

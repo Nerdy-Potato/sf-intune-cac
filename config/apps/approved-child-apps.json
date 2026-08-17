@@ -22,21 +22,6 @@
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
-      "id": "android-authenticator",
-      "platform": "android",
-      "source": "managedGooglePlay",
-      "payload": {
-        "@odata.type": "#microsoft.graph.managedAndroidStoreApp",
-        "displayName": "Microsoft Authenticator",
-        "description": "Required Entra device registration and authentication client. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation",
-        "packageId": "com.azure.authenticator",
-        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.azure.authenticator",
-        "minimumSupportedOperatingSystem": { "v8_0": true }
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
-    },
-    {
       "id": "android-m365-copilot",
       "platform": "android",
       "source": "managedGooglePlay",
@@ -182,22 +167,6 @@
         "publisher": "Microsoft Corporation",
         "bundleId": "com.microsoft.scmx",
         "appStoreUrl": "https://apps.apple.com/us/app/microsoft-defender-security/id1526737990",
-        "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
-        "minimumSupportedOperatingSystem": { "v16_0": true }
-      },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
-    },
-    {
-      "id": "ios-authenticator",
-      "platform": "ios",
-      "source": "iosStore",
-      "payload": {
-        "@odata.type": "#microsoft.graph.iosStoreApp",
-        "displayName": "Microsoft Authenticator",
-        "description": "Required Entra device registration and authentication client. Managed by sf-intune-cac.",
-        "publisher": "Microsoft Corporation",
-        "bundleId": "com.microsoft.azureauthenticator",
-        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-authenticator/id983156458",
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },

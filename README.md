@@ -26,7 +26,8 @@ tenant that a human has not first seen as a plan**.
 
 Nothing else has permission to write to the tenant. A manually dispatched Deploy must select a
 reviewed commit on `main`; branches and tags are rejected. Deletions are never carried out unless a
-human explicitly starts that deployment with `allow_delete`.
+human explicitly starts that deployment with `allow_delete`. The solo-maintainer recovery path is
+documented in [docs/operations.md](docs/operations.md).
 
 ## Layout
 
@@ -39,6 +40,7 @@ config/                    Desired state - the source of truth
 schemas/                   JSON schemas every config file is validated against
 src/IntuneCaC/             The plan/apply engine (PowerShell, Microsoft Graph)
 scripts/Invoke-CaC.ps1     Entry point used by the workflows and by humans
+scripts/bootstrap/         Human-triggered helpers for documented deployment recovery flows
 bootstrap/                 The one-time, documented setup that CI/CD cannot do for itself
 tests/                     Pester tests - run offline, no tenant required
 docs/                      Architecture, bootstrap, age tiers, operations
