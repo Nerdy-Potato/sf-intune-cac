@@ -183,6 +183,36 @@ Describe 'Deployment action propagation' {
         $script:Entrypoint | Should -Match '(?is)\$results.*Skipped'
         $script:Entrypoint | Should -Match '(?is)\$results.*Failed'
     }
+
+    It 'does not treat ManualActionRequired as an incomplete deployment outcome (deviceEnrollmentConfigurations manual-apply contract)' {
+        if ($script:Entrypoint -match '(?s)\$incomplete\s*=\s*@\(\$results\s*\|\s*Where-Object\s+Status\s+-in\s+@\(([^)]*)\)\)') {
+            $Matches[1] | Should -Not -Match 'ManualActionRequired'
+            $Matches[1] | Should -Match "'Skipped'"
+            $Matches[1] | Should -Match "'Failed'"
+        }
+        else {
+            throw 'Could not locate the incomplete-actions filter in the entrypoint script.'
+        }
+    }
+
+    It 'gives ManualActionRequired results a dedicated, prominent job-summary section' {
+        $script:Entrypoint | Should -Match 'ManualActionRequired'
+        $script:Entrypoint | Should -Match 'Manual portal action required'
+        $script:Entrypoint | Should -Match 'Microsoft365DSC/Microsoft365DSC#5127'
+        $script:Entrypoint | Should -Match 'Enrollment restrictions'
+        $script:Entrypoint | Should -Match 'rest of this deployment completed normally'
+    }
+
+    It 'never throws the deployment-incomplete error when only ManualActionRequired results are present' {
+        # Functional guard mirroring the entrypoint's exact incomplete-actions filter, so this
+        # keeps failing if a future edit widens the filter to include ManualActionRequired.
+        $results = @(
+            [pscustomobject]@{ Action = 'Create policy'; Target = 'CaC - Enrollment - Test'; Status = 'ManualActionRequired'; Message = 'manual step' }
+            [pscustomobject]@{ Action = 'Create group'; Target = 'CaC-Tier-Adult'; Status = 'Applied'; Message = '' }
+        )
+        $incomplete = @($results | Where-Object Status -in @('Skipped', 'Failed'))
+        $incomplete | Should -BeNullOrEmpty
+    }
 }
 
 Describe 'Plan and apply binding' {

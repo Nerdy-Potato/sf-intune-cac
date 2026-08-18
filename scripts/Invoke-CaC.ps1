@@ -209,6 +209,29 @@ if ($env:GITHUB_STEP_SUMMARY) {
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
 }
 
+# 'ManualActionRequired' is an expected, successful outcome for resource kinds Microsoft Graph
+# permanently refuses app-only writes to (deviceEnrollmentConfigurations - see
+# Get-CaCResourceMap and .squad/decisions.md's 2026-08-18 manual-apply contract). It is
+# deliberately NOT included in $incomplete below: the plan/apply pipeline did exactly what it
+# should - detected the diff and correctly declined to attempt a blocked write - so it must never
+# fail the deploy on its own. The per-result line above is easy to miss among ordinary "Applied"
+# rows, so give it a dedicated, prominent job-summary section as well.
+$manualActionItems = @($results | Where-Object Status -eq 'ManualActionRequired')
+if ($manualActionItems -and $env:GITHUB_STEP_SUMMARY) {
+    $manualActionLines = [System.Collections.Generic.List[string]]::new()
+    $manualActionLines.Add("`n### :warning: Manual portal action required`n")
+    $manualActionLines.Add('Microsoft Graph blocks app-only/service-principal writes to Enrollment Restrictions by design - this is a documented Microsoft Graph platform limitation, not a bug in this pipeline. See [Microsoft365DSC/Microsoft365DSC#5127](https://github.com/microsoft/Microsoft365DSC/issues/5127).')
+    $manualActionLines.Add('')
+    $manualActionLines.Add('Apply the item(s) below by hand in the Intune admin center: Devices > Enrollment > Enrollment restrictions (Platform restrictions / Device limit restrictions, as applicable).')
+    $manualActionLines.Add('')
+    $manualActionLines.Add('The rest of this deployment completed normally; only the item(s) below still need a manual step.')
+    $manualActionLines.Add('')
+    foreach ($item in $manualActionItems) {
+        $manualActionLines.Add("- $($item.Action) - $($item.Target): $($item.Message)")
+    }
+    ($manualActionLines -join "`n") | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
+}
+
 $incomplete = @($results | Where-Object Status -in @('Skipped', 'Failed'))
 if ($incomplete) {
     $summary = ($incomplete | ForEach-Object {

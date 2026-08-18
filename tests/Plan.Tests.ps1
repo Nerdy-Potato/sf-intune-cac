@@ -150,6 +150,26 @@ BeforeAll {
     }
 }
 
+Describe 'Get-CaCResourceMap' {
+    It 'flags deviceEnrollmentConfigurations as requiring a manual portal apply' {
+        InModuleScope IntuneCaC {
+            (Get-CaCResourceMap -Resource 'deviceEnrollmentConfigurations').RequiresPortalApply | Should -BeTrue
+        }
+    }
+
+    It 'does not flag any other resource kind' {
+        InModuleScope IntuneCaC {
+            $map = Get-CaCResourceMap
+            $otherKinds = @($map.Keys | Where-Object { $_ -ne 'deviceEnrollmentConfigurations' })
+            $otherKinds.Count | Should -BeGreaterThan 0
+            foreach ($kind in $otherKinds) {
+                ($map[$kind].ContainsKey('RequiresPortalApply') -and $map[$kind].RequiresPortalApply) |
+                    Should -Not -BeTrue -Because "resource kind '$kind' must not require a manual portal apply"
+            }
+        }
+    }
+}
+
 Describe 'New-CaCPlan' {
     Context 'against an empty tenant' {
         BeforeAll {
@@ -405,6 +425,158 @@ Describe 'New-CaCPlan' {
             $membership[0].Details -join ' ' | Should -BeLike '*add:*'
             @($script:MemberPlan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -ne 'NoChange' }) | Should -BeNullOrEmpty
         }
+    }
+
+    Context 'RequiresPortalApply propagation for deviceEnrollmentConfigurations' {
+        # Microsoft Graph permanently blocks app-only writes to deviceEnrollmentConfigurations
+        # (Microsoft365DSC/Microsoft365DSC#5127). See .squad/decisions.md (2026-08-18 manual-apply
+        # contract): New-CaCPlan must stamp RequiresPortalApply = $true on Create/Update/Delete/
+        # Assignment actions for this resource kind only, and leave every other resource kind at
+        # the default $false so Invoke-CaCPlan can safely skip the Graph write for this kind alone.
+
+        It 'flags Create and its paired Assignment action for every new enrollment restriction' {
+            $state = New-FakeTenant
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+            $enrollmentCreates = @($plan | Where-Object {
+                    $_.Kind -eq 'Policy' -and $_.Action -eq 'Create' -and $_.Data.resource -eq 'deviceEnrollmentConfigurations'
+                })
+            $enrollmentCreates.Count | Should -BeGreaterThan 0
+            @($enrollmentCreates | Where-Object { -not $_.RequiresPortalApply }) | Should -BeNullOrEmpty
+
+            $enrollmentTargets = @($enrollmentCreates | ForEach-Object { $_.Target })
+            $enrollmentAssignments = @($plan | Where-Object { $_.Kind -eq 'Assignment' -and $_.Target -in $enrollmentTargets })
+            $enrollmentAssignments.Count | Should -Be $enrollmentCreates.Count
+            @($enrollmentAssignments | Where-Object { -not $_.RequiresPortalApply }) | Should -BeNullOrEmpty
+        }
+
+        It 'leaves every other resource kind at the default RequiresPortalApply = $false' {
+            $state = New-FakeTenant
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+            $otherCreates = @($plan | Where-Object {
+                    $_.Kind -eq 'Policy' -and $_.Action -eq 'Create' -and $_.Data.resource -ne 'deviceEnrollmentConfigurations'
+                })
+            $otherCreates.Count | Should -BeGreaterThan 0
+            @($otherCreates | Where-Object RequiresPortalApply) | Should -BeNullOrEmpty
+
+            $otherAssignments = @($plan | Where-Object {
+                    $_.Kind -eq 'Assignment' -and $_.Target -notin (@($plan | Where-Object {
+                                $_.Kind -eq 'Policy' -and $_.Data.resource -eq 'deviceEnrollmentConfigurations'
+                            }) | ForEach-Object { $_.Target })
+                })
+            @($otherAssignments | Where-Object RequiresPortalApply) | Should -BeNullOrEmpty
+        }
+
+        It 'flags an Update action when a managed enrollment restriction drifts' {
+            $state = New-FakeTenant -InSync
+            $remoteEnrollment = @($state.Policies['deviceEnrollmentConfigurations'])[0]
+            $remoteEnrollment.priority = $remoteEnrollment.priority + 100
+
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+            $update = @($plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'Update' -and $_.Target -eq $remoteEnrollment.displayName })
+            $update.Count | Should -Be 1
+            $update[0].RequiresPortalApply | Should -BeTrue
+        }
+
+        It 'flags a Delete action for an orphaned, no-longer-configured enrollment restriction' {
+            $state = New-FakeTenant -InSync -ExtraPolicies @(
+                @{
+                    Resource = 'deviceEnrollmentConfigurations'
+                    Object   = [pscustomobject]@{
+                        id          = 'orphan-enrollment-1'
+                        displayName = "$($script:Config.Tenant.namePrefix) - Enrollment - Retired Policy"
+                        description = $script:Config.Tenant.managedMarker
+                    }
+                }
+            )
+
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+            $delete = @($plan | Where-Object { $_.Action -eq 'Delete' -and $_.Target -eq "$($script:Config.Tenant.namePrefix) - Enrollment - Retired Policy" })
+            $delete.Count | Should -Be 1
+            $delete[0].RequiresPortalApply | Should -BeTrue
+        }
+
+        It 'never reports a RequiresPortalApply item as Skip or Prerequisite, so the plan stays Ready-eligible' {
+            # Mirrors the exact blocking predicate used by Assert-CaCReviewedPlan and
+            # scripts/Invoke-CaC.ps1's Status computation: Action -in @('Skip', 'Prerequisite').
+            # RequiresPortalApply items must never match it, or an unrelated PR would be
+            # permanently blocked for no safety benefit (see the manual-apply contract).
+            $state = New-FakeTenant
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+
+            $portalApplyItems = @($plan | Where-Object RequiresPortalApply)
+            $portalApplyItems.Count | Should -BeGreaterThan 0
+            @($portalApplyItems | Where-Object { $_.Action -in @('Skip', 'Prerequisite') }) | Should -BeNullOrEmpty
+
+            $blocked = @($plan | Where-Object { $_.Action -in @('Skip', 'Prerequisite') })
+            $blocked | Should -BeNullOrEmpty
+        }
+    }
+}
+
+Describe 'Format-CaCPlan RequiresPortalApply callout' {
+    It 'renders a distinct [!IMPORTANT] banner, separate from the [!CAUTION] blocked banner, listing the affected targets' {
+        $plan = @(
+            [pscustomobject]@{
+                Kind                = 'Policy'
+                Action              = 'Create'
+                Target              = 'CaC - Enrollment - Corporate-Owned Child Devices (Android)'
+                Details             = @('resource: deviceEnrollmentConfigurations')
+                Data                = $null
+                RequiresPortalApply = $true
+            }
+        )
+
+        $markdown = $plan | Format-CaCPlan
+
+        $markdown | Should -Match '\[!IMPORTANT\]'
+        $markdown | Should -BeLike '*Microsoft365DSC/Microsoft365DSC#5127*'
+        $markdown | Should -BeLike '*Enrollment restrictions*'
+        $markdown | Should -BeLike '*CaC - Enrollment - Corporate-Owned Child Devices (Android)*'
+        $markdown | Should -Not -Match '\[!CAUTION\]'
+    }
+
+    It 'does not render the callout when no plan item requires a manual portal apply' {
+        $plan = @(
+            [pscustomobject]@{
+                Kind                = 'Group'
+                Action              = 'Create'
+                Target              = 'CaC-Tier-Adult'
+                Details             = @()
+                Data                = $null
+                RequiresPortalApply = $false
+            }
+        )
+
+        ($plan | Format-CaCPlan) | Should -Not -Match '\[!IMPORTANT\]'
+    }
+
+    It 'does not confuse a RequiresPortalApply item with a blocked Skip/Prerequisite item' {
+        $plan = @(
+            [pscustomobject]@{
+                Kind                = 'Policy'
+                Action              = 'Create'
+                Target              = 'CaC - Enrollment - Corporate-Owned Child Devices (Android)'
+                Details             = @()
+                Data                = $null
+                RequiresPortalApply = $true
+            }
+            [pscustomobject]@{
+                Kind                = 'App'
+                Action              = 'Prerequisite'
+                Target              = 'Global Secure Access Client'
+                Details             = @('package must be added first')
+                Data                = $null
+                RequiresPortalApply = $false
+            }
+        )
+
+        $markdown = $plan | Format-CaCPlan
+        $markdown | Should -Match '\[!IMPORTANT\]'
+        $markdown | Should -Match '\[!CAUTION\]'
     }
 }
 
@@ -949,6 +1121,161 @@ Describe 'Invoke-CaCPlan' {
             -GraphInvoker { param($Method, $Uri, $Body) [pscustomobject]@{ value = @() } } -Confirm:$false
 
         ($results | Where-Object Target -EQ 'Global Secure Access Client').Status | Should -Be 'Skipped'
+    }
+
+    Context 'RequiresPortalApply actions (deviceEnrollmentConfigurations manual-apply contract)' {
+        BeforeAll {
+            $script:EnrollmentPolicy = $script:Config.Policies | Where-Object resource -EQ 'deviceEnrollmentConfigurations' | Select-Object -First 1
+            $script:EnrollmentEndpoint = InModuleScope IntuneCaC { Get-CaCResourceMap -Resource 'deviceEnrollmentConfigurations' }
+
+            # Fails the test loudly if Invoke-CaCPlan ever attempts a Graph write for a
+            # RequiresPortalApply action - the entire point of the contract is that it never does.
+            function New-CaCNoGraphWriteInvoker {
+                return {
+                    param($Method, $Uri, $Body)
+                    if ($Method -ne 'GET') {
+                        throw "Unexpected Graph write for a RequiresPortalApply action: $Method $Uri"
+                    }
+                    [pscustomobject]@{ value = @() }
+                }
+            }
+        }
+
+        It 'never calls Graph and reports ManualActionRequired for a Create action' {
+            $plan = @([pscustomobject]@{
+                    Kind                = 'Policy'
+                    Action              = 'Create'
+                    Target              = $script:EnrollmentPolicy.payload.displayName
+                    Details             = @('resource: deviceEnrollmentConfigurations')
+                    Data                = $script:EnrollmentPolicy
+                    RequiresPortalApply = $true
+                })
+
+            $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                -GraphInvoker (New-CaCNoGraphWriteInvoker) -Confirm:$false
+
+            $result = $results | Where-Object Target -EQ $script:EnrollmentPolicy.payload.displayName
+            $result.Status | Should -Be 'ManualActionRequired'
+        }
+
+        It 'never calls Graph and reports ManualActionRequired for an Update action' {
+            $plan = @([pscustomobject]@{
+                    Kind                = 'Policy'
+                    Action              = 'Update'
+                    Target              = $script:EnrollmentPolicy.payload.displayName
+                    Details             = @('priority: 1 -> 2')
+                    Data                = [pscustomobject]@{ Policy = $script:EnrollmentPolicy; Id = 'existing-enrollment-id' }
+                    RequiresPortalApply = $true
+                })
+
+            $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                -GraphInvoker (New-CaCNoGraphWriteInvoker) -Confirm:$false
+
+            $result = $results | Where-Object Target -EQ $script:EnrollmentPolicy.payload.displayName
+            $result.Status | Should -Be 'ManualActionRequired'
+            $result.Message | Should -BeLike '*existing-enrollment-id*'
+        }
+
+        It 'never calls Graph and reports ManualActionRequired for a create-path Assignment action' {
+            $plan = @([pscustomobject]@{
+                    Kind                = 'Assignment'
+                    Action              = 'Update'
+                    Target              = $script:EnrollmentPolicy.payload.displayName
+                    Details             = @('include sg-tier-child')
+                    Data                = $script:EnrollmentPolicy
+                    RequiresPortalApply = $true
+                })
+
+            $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                -GraphInvoker (New-CaCNoGraphWriteInvoker) -Confirm:$false
+
+            (($results | Where-Object Target -EQ $script:EnrollmentPolicy.payload.displayName)).Status |
+                Should -Be 'ManualActionRequired'
+        }
+
+        It 'never calls Graph and reports ManualActionRequired for a drift-path Assignment action' {
+            $plan = @([pscustomobject]@{
+                    Kind                = 'Assignment'
+                    Action              = 'Update'
+                    Target              = $script:EnrollmentPolicy.payload.displayName
+                    Details             = @('add: sg-tier-teen')
+                    Data                = [pscustomobject]@{ Policy = $script:EnrollmentPolicy; Id = 'existing-enrollment-id' }
+                    RequiresPortalApply = $true
+                })
+
+            $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                -GraphInvoker (New-CaCNoGraphWriteInvoker) -Confirm:$false
+
+            (($results | Where-Object Target -EQ $script:EnrollmentPolicy.payload.displayName)).Status |
+                Should -Be 'ManualActionRequired'
+        }
+
+        It 'never calls Graph and reports ManualActionRequired for an orphan Delete action, even with -AllowDelete' {
+            $plan = @([pscustomobject]@{
+                    Kind                = 'Policy'
+                    Action              = 'Delete'
+                    Target              = 'CaC - Enrollment - Retired Policy'
+                    Details             = @('no longer defined in config')
+                    Data                = [pscustomobject]@{ Id = 'orphan-enrollment-id'; Endpoint = $script:EnrollmentEndpoint }
+                    RequiresPortalApply = $true
+                })
+
+            foreach ($allowDelete in @($false, $true)) {
+                $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                    -GraphInvoker (New-CaCNoGraphWriteInvoker) -AllowDelete:$allowDelete -Confirm:$false
+
+                $result = $results | Where-Object Target -EQ 'CaC - Enrollment - Retired Policy'
+                $result.Status | Should -Be 'ManualActionRequired' -Because "AllowDelete=$allowDelete must not change this outcome"
+                $result.Message | Should -BeLike '*orphan-enrollment-id*'
+            }
+        }
+
+        It 'includes the portal blade path and the confirmed evidence reference in every manual-action message' {
+            $plan = @([pscustomobject]@{
+                    Kind                = 'Policy'
+                    Action              = 'Create'
+                    Target              = $script:EnrollmentPolicy.payload.displayName
+                    Details             = @('resource: deviceEnrollmentConfigurations')
+                    Data                = $script:EnrollmentPolicy
+                    RequiresPortalApply = $true
+                })
+
+            $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                -GraphInvoker (New-CaCNoGraphWriteInvoker) -Confirm:$false
+
+            $message = ($results | Where-Object Target -EQ $script:EnrollmentPolicy.payload.displayName).Message
+            $message | Should -BeLike '*Enrollment restrictions*'
+            $message | Should -BeLike '*Microsoft365DSC/Microsoft365DSC#5127*'
+            $message | Should -BeLike '*rest of this deployment completed normally*'
+        }
+
+        It 'still applies unrelated actions in the same plan alongside a RequiresPortalApply item' {
+            $group = $script:Config.Groups[0]
+            $plan = @(
+                [pscustomobject]@{
+                    Kind                = 'Policy'
+                    Action              = 'Create'
+                    Target              = $script:EnrollmentPolicy.payload.displayName
+                    Details             = @('resource: deviceEnrollmentConfigurations')
+                    Data                = $script:EnrollmentPolicy
+                    RequiresPortalApply = $true
+                }
+                [pscustomobject]@{
+                    Kind    = 'Group'
+                    Action  = 'Create'
+                    Target  = $group.displayName
+                    Details = @()
+                    Data    = $group
+                }
+            )
+            $state = New-FakeTenant
+            $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+            ($results | Where-Object Target -EQ $script:EnrollmentPolicy.payload.displayName).Status |
+                Should -Be 'ManualActionRequired'
+            ($results | Where-Object Target -EQ $group.displayName).Status | Should -Be 'Applied'
+        }
     }
 }
 
