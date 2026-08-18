@@ -97,10 +97,13 @@ Require these checks before merge:
 - `CI / Validate configuration`
 - `Plan / Plan against the tenant`
 
-and require a pull request review. Direct pushes to `main` should be blocked - a push to `main` is
-a deployment, and Deploy rejects any commit that is not associated with a reviewed pull request.
-Manual Deploy runs must select a commit on `main`; the workflow's reviewed-commit check rejects
-branches and tags.
+Direct pushes to `main` should be blocked - a push to `main` is a deployment, and Deploy rejects
+any commit that is not associated with a merged pull request. Do **not** also require a pull
+request review here: this is a solo-maintained repository, GitHub can never let a maintainer
+approve their own pull request, and Deploy no longer gates on PR approval - the successful Plan
+run, the merge-commit check, and the `production` environment's required reviewer are the
+enforced gates. Manual Deploy runs must select a commit on `main`; the workflow's reviewed-commit
+check rejects branches and tags.
 
 ## 5. Approve Android apps in Managed Google Play
 

@@ -4,9 +4,13 @@
     Dispatches the documented solo-maintainer recovery deployment workflow.
 .DESCRIPTION
     Auto-discovers the correct reviewed commit and starts deploy.yml in its workflow_dispatch
-    recovery mode. This is the repository's designed recovery path for a solo maintainer when
-    GitHub cannot accept a self-approval review; it still requires an explicit reviewed commit,
-    a successful plan artifact, and the production environment gate.
+    recovery mode. Deploy's normal push-triggered path no longer requires a peer-approved pull
+    request (GitHub can never let a maintainer approve their own pull request, so that check was
+    removed as redundant with the gates below). Use this script instead when you need to
+    (re)dispatch a deploy for an already-reviewed commit without pushing a new one - for example,
+    redeploying after out-of-band tenant remediation, or re-running a deploy whose automatic
+    push-triggered run did not fire. It still requires an explicit reviewed commit, a successful
+    plan artifact, and the production environment gate.
 
     deploy.yml's recovery-mode verify step requires `reviewed_sha` to equal an actual merged pull
     request's HEAD commit (`head.sha`, i.e. the tip of the PR branch before it was merged) -- NOT
