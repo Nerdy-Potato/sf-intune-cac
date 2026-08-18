@@ -88,7 +88,7 @@
       "mailNickname": "nuclear-family-sg",
       "description": "Whole-family group (adults and kids). Adopted from a pre-existing live group; only ever used for opt-in 'available' app assignments, never required/enforced policies, to avoid impacting the adult accounts.",
       "purpose": "assignment",
-      "membership": { "source": "explicit", "values": [] }
+      "membership": { "source": "explicit", "values": ["john", "robin", "samantha", "lucas", "adalynn", "emmerick", "broderick", "cullen"] }
     },
     {
       "id": "sg-breakglass",
