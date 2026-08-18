@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Adults use MAM-only app protection (see android-app-protection-baseline.json), which does not",
+    "require device enrollment or compliance (deviceComplianceRequired: false there). Without this",
+    "restriction, Company Portal offers to set up an Android Enterprise Work Profile the moment an",
+    "adult signs in to check on a stuck app - creating an unwanted managed container on a personal",
+    "phone. platformBlocked blocks Android Enterprise enrollment entirely for the adult tier; MAM app",
+    "protection for Outlook/OneDrive/Office/Edge/Teams is unaffected since it never enrolls the device."
+  ],
+  "name": "adult-enrollment-restriction-android-for-work",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-adult", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Adult Personal Devices (Android for Work)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 2,
+    "platformType": "androidForWork",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}
