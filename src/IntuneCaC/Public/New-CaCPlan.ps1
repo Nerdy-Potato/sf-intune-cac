@@ -36,7 +36,13 @@ function New-CaCPlan {
             [string] $Target,
             [string[]] $Details = @(),
             $Data,
-            [string] $ObjectId
+            [string] $ObjectId,
+            # Orthogonal to Action: true only for resource kinds whose Graph endpoint permanently
+            # rejects app-only writes (see Get-CaCResourceMap's deviceEnrollmentConfigurations
+            # entry). Always set - defaulting to $false - so the property's presence/shape never
+            # varies across the action array (keeps Get-CaCPlanHash's JSON shape uniform, same
+            # pattern already used for ObjectId).
+            [bool] $RequiresPortalApply = $false
         )
 
         $actions.Add([pscustomobject]@{
@@ -46,6 +52,7 @@ function New-CaCPlan {
                 Details = $Details
                 Data    = $Data
                 ObjectId = $ObjectId
+                RequiresPortalApply = $RequiresPortalApply
             })
     }
 
@@ -246,6 +253,12 @@ function New-CaCPlan {
         $resource = $resourceGroup.Name
         $endpoint = Get-CaCResourceMap -Resource $resource
         $remoteObjects = @((& $GraphInvoker 'GET' $endpoint.Path $null).value | Where-Object { $_ })
+        # Per-resource-kind, permanent Graph write restriction (see Get-CaCResourceMap). Read via
+        # Get-CaCProperty (not dot-notation) because $endpoint is a hashtable and most resource
+        # kinds omit this key entirely - under Set-StrictMode, $endpoint.RequiresPortalApply would
+        # throw PropertyNotFoundException for those. Coercing to [bool] turns the resulting $null
+        # into a real $false so Add-Action's -RequiresPortalApply parameter always gets a boolean.
+        $requiresPortalApply = [bool] (Get-CaCProperty -InputObject $endpoint -Name 'RequiresPortalApply')
 
         foreach ($policy in $resourceGroup.Group) {
             if (-not $policy.enabled) {
@@ -256,10 +269,11 @@ function New-CaCPlan {
             $remote = $remoteObjects | Where-Object { $_.displayName -eq $policy.payload.displayName } | Select-Object -First 1
 
             if (-not $remote) {
-                Add-Action -Kind 'Policy' -Action 'Create' -Target $policy.payload.displayName -Data $policy -Details @("resource: $resource")
+                Add-Action -Kind 'Policy' -Action 'Create' -Target $policy.payload.displayName -Data $policy -Details @("resource: $resource") `
+                    -RequiresPortalApply $requiresPortalApply
                 Add-Action -Kind 'Assignment' -Action 'Update' -Target $policy.payload.displayName -Data $policy -Details @(
                     ($policy.assignments | ForEach-Object { "$($_.intent) $($_.group)" })
-                )
+                ) -RequiresPortalApply $requiresPortalApply
                 continue
             }
 
@@ -289,7 +303,7 @@ function New-CaCPlan {
                 Add-Action -Kind 'Policy' -Action 'Update' -Target $policy.payload.displayName -Details $drift -Data ([pscustomobject]@{
                         Policy = $policy
                         Id     = $remote.id
-                    })
+                    }) -RequiresPortalApply $requiresPortalApply
             }
             else {
                 Add-Action -Kind 'Policy' -Action 'NoChange' -Target $policy.payload.displayName -Data ([pscustomobject]@{
@@ -303,7 +317,7 @@ function New-CaCPlan {
                 Add-Action -Kind 'Assignment' -Action 'Update' -Target $policy.payload.displayName -Details $assignmentDrift -Data ([pscustomobject]@{
                         Policy = $policy
                         Id     = $remote.id
-                    })
+                    }) -RequiresPortalApply $requiresPortalApply
             }
         }
 
@@ -318,7 +332,7 @@ function New-CaCPlan {
             ) -Data ([pscustomobject]@{
                     Id       = $remote.id
                     Endpoint = $endpoint
-                })
+                }) -RequiresPortalApply $requiresPortalApply
         }
     }
 

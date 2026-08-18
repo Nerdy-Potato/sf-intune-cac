@@ -52,6 +52,59 @@ function Invoke-CaCPlan {
         }
     }
 
+    function Test-CaCActionRequiresPortalApply {
+        <#
+        .SYNOPSIS
+            True only for actions whose resource kind permanently rejects app-only Graph writes
+            (see Get-CaCResourceMap's deviceEnrollmentConfigurations entry). Defensive against plan
+            objects (hand-built in tests, or older reviewed-plan artifacts predating this flag) that
+            never had the property at all - absence is treated the same as an explicit $false.
+        #>
+        param($Action)
+
+        if (-not (Test-CaCHasProperty -InputObject $Action -Name 'RequiresPortalApply')) { return $false }
+        return [bool] (Get-CaCProperty -InputObject $Action -Name 'RequiresPortalApply')
+    }
+
+    function Get-CaCPortalApplyBladeLabel {
+        <#
+        .SYNOPSIS
+            Best-effort Intune admin center blade path for a manual enrollment-restriction change.
+            The Enrollment restrictions blade has separate "Platform restrictions" and "Device limit
+            restrictions" tabs; fall back to the parent blade name when the payload shape (or its
+            @odata.type) is not available to disambiguate, e.g. for orphan deletes.
+        #>
+        param($Payload)
+
+        $odataType = if ($Payload) { Get-CaCProperty -InputObject $Payload -Name '@odata.type' } else { $null }
+        switch ($odataType) {
+            '#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration' {
+                return 'Devices > Enrollment > Enrollment restrictions > Platform restrictions'
+            }
+            '#microsoft.graph.deviceEnrollmentLimitConfiguration' {
+                return 'Devices > Enrollment > Enrollment restrictions > Device limit restrictions'
+            }
+            default {
+                return 'Devices > Enrollment > Enrollment restrictions'
+            }
+        }
+    }
+
+    function Get-CaCPortalApplyMessage {
+        <#
+        .SYNOPSIS
+            Result message for a 'ManualActionRequired' action. Carries the same four content
+            requirements as the Format-CaCPlan plan-time banner so the information survives
+            independently of whether the plan.md comment is still visible once someone is looking
+            at apply results (see .squad/decisions.md, 2026-08-18 manual-apply contract).
+        #>
+        param($Payload, [string] $ObjectId)
+
+        $blade = Get-CaCPortalApplyBladeLabel -Payload $Payload
+        $idSuffix = if ($ObjectId) { " (object id: $ObjectId)" } else { '' }
+        return "Manual portal action required$idSuffix. Microsoft Graph blocks app-only/service-principal writes to Enrollment Restrictions by design - this is a documented Microsoft Graph platform limitation, not a bug in this pipeline (see Microsoft365DSC/Microsoft365DSC#5127). Apply this change by hand in the Intune admin center: $blade. The rest of this deployment completed normally; only this manual step remains, and the next plan run will show NoChange here once the portal matches this configuration."
+    }
+
     function Wait-CaCAppPublished {
         param(
             [Parameter(Mandatory)]
@@ -530,6 +583,13 @@ function Invoke-CaCPlan {
 
         $endpoint = Get-CaCResourceMap -Resource $policy.resource
 
+        if (Test-CaCActionRequiresPortalApply -Action $action) {
+            $existingId = if ($action.Action -eq 'Update') { Get-CaCProperty -InputObject $actionData -Name 'Id' } else { $null }
+            Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'ManualActionRequired' `
+                -Message (Get-CaCPortalApplyMessage -Payload $policy.payload -ObjectId $existingId)
+            continue
+        }
+
         if (-not $PSCmdlet.ShouldProcess($action.Target, "$($action.Action) policy")) { continue }
         try {
             $payload = Get-CaCPolicyPayload -Policy $policy -AppObjectIds $appIds
@@ -590,6 +650,16 @@ function Invoke-CaCPlan {
             continue
         }
 
+        # Checked before policy id resolution: a Create-path Assignment for a RequiresPortalApply
+        # policy has no Id yet (the Create itself was never sent to Graph either), which would
+        # otherwise fall through to the generic "policy id could not be resolved" Failed result
+        # below - misreporting an expected manual step as a real failure.
+        if (Test-CaCActionRequiresPortalApply -Action $action) {
+            Add-Result -Action 'Assign policy' -Target $action.Target -Status 'ManualActionRequired' `
+                -Message (Get-CaCPortalApplyMessage -Payload $policy.payload)
+            continue
+        }
+
         $endpoint = Get-CaCResourceMap -Resource $policy.resource
 
         $policyId = if ($policyIds.ContainsKey($policy.payload.displayName)) {
@@ -629,6 +699,16 @@ function Invoke-CaCPlan {
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Action -eq 'Delete' })) {
+        # Checked before the -AllowDelete gate: an orphaned RequiresPortalApply object can never be
+        # deleted through Graph regardless of approval, so it must always surface as a manual step
+        # rather than as a 'Skipped' result that would otherwise fail the whole deploy purely for
+        # lack of allow_delete on a delete this pipeline could never perform anyway.
+        if (Test-CaCActionRequiresPortalApply -Action $action) {
+            Add-Result -Action 'Delete policy' -Target $action.Target -Status 'ManualActionRequired' `
+                -Message (Get-CaCPortalApplyMessage -ObjectId (Get-CaCProperty -InputObject $action.Data -Name 'Id'))
+            continue
+        }
+
         if (-not $AllowDelete) {
             Add-Result -Action 'Delete policy' -Target $action.Target -Status 'Skipped' -Message 'deletion requires an explicit approval (allow_delete)'
             continue

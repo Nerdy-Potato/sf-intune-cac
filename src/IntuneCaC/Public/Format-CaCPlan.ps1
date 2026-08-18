@@ -20,6 +20,14 @@ function Format-CaCPlan {
         $changes = @($items | Where-Object { $_.Action -ne 'NoChange' })
         $blocked = @($items | Where-Object { $_.Action -in @('Skip', 'Prerequisite') })
         $adoptions = @($items | Where-Object { $_.Action -eq 'Adopt' })
+        # Orthogonal to $blocked: these items are a normal, honest Create/Update/Delete/Assignment
+        # diff for a resource kind Microsoft Graph permanently refuses app-only writes to (see
+        # Get-CaCResourceMap's deviceEnrollmentConfigurations entry). They are not blocked and will
+        # still be attempted for every other resource in the same plan - flagged separately so the
+        # callout can never be mistaken for "the deployment is blocked".
+        $portalApplyItems = @($changes | Where-Object {
+                $_.PSObject.Properties['RequiresPortalApply'] -and $_.RequiresPortalApply
+            })
 
         $lines = [System.Collections.Generic.List[string]]::new()
         $lines.Add('## Intune configuration plan')
@@ -39,6 +47,18 @@ function Format-CaCPlan {
         if ($blocked) {
             $lines.Add('> [!CAUTION]')
             $lines.Add('> This plan contains skipped or prerequisite actions. Deployment is blocked until they are resolved.')
+            $lines.Add('')
+        }
+
+        if ($portalApplyItems) {
+            $lines.Add('> [!IMPORTANT]')
+            $lines.Add('> Microsoft Graph blocks app-only/service-principal writes to Enrollment Restrictions by design - this is not a bug in this pipeline and will not be fixed by retrying or by changing the app registration''s permissions/roles (see [Microsoft365DSC/Microsoft365DSC#5127](https://github.com/microsoft/Microsoft365DSC/issues/5127)).')
+            $lines.Add('> Apply the item(s) below by hand in the Intune admin center: Devices > Enrollment > Enrollment restrictions (Platform restrictions / Device limit restrictions, as applicable).')
+            $lines.Add('> Everything else in this plan still deploys automatically. The next plan run will show `NoChange` for these once the portal matches this configuration.')
+            $lines.Add('>')
+            foreach ($item in $portalApplyItems) {
+                $lines.Add("> - $($item.Action) $($item.Kind): $($item.Target)")
+            }
             $lines.Add('')
         }
 

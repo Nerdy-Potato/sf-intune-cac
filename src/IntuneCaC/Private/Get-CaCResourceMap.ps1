@@ -25,10 +25,17 @@ function Get-CaCResourceMap {
             SupportsApps = $false
         }
         deviceEnrollmentConfigurations = @{
-            Path               = 'deviceManagement/deviceEnrollmentConfigurations'
-            AssignAction       = 'assign'
-            AssignmentBodyName = 'enrollmentConfigurationAssignments'
-            SupportsApps       = $false
+            Path                = 'deviceManagement/deviceEnrollmentConfigurations'
+            AssignAction        = 'assign'
+            AssignmentBodyName  = 'enrollmentConfigurationAssignments'
+            SupportsApps        = $false
+            # Microsoft Graph permanently blocks app-only/service-principal WRITES (create/update/
+            # delete/assign) to this resource type - by design, confirmed by Microsoft support
+            # (Microsoft365DSC/Microsoft365DSC#5127). Reads are unaffected, so this repository keeps
+            # planning/diffing this resource normally; Invoke-CaCPlan uses this flag to skip the
+            # Graph write and report a manual portal step instead of attempting (and permanently
+            # failing) the call. See .squad/decisions.md (2026-08-18: manual-apply contract).
+            RequiresPortalApply = $true
         }
         iosManagedAppProtections     = @{
             Path         = 'deviceAppManagement/iosManagedAppProtections'
