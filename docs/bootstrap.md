@@ -225,3 +225,30 @@ remove the `adoption` section from `config/tenant.json` in a follow-up pull requ
 The deployment checkout is read-only by design, so cleanup is intentionally a reviewed repository
 change rather than an automatic commit. If adoption fails, leave the section in place and re-plan;
 do not broaden it or use a global takeover switch.
+
+## 8. Troubleshooting: MAM app registration conflicts ("already managed with account X")
+
+The MAM SDK (used by Outlook, Teams, OneDrive, the Office apps, and Edge under
+`android-app-protection-baseline.json`/`ios-app-protection-baseline.json`) can get stuck showing:
+
+> This app is already managed with account X. Only a single managed account is allowed for this
+> app. To use account X, you must first remove X from this application.
+
+This is not caused by tenant policy - it means the tenant-side `managedAppRegistration` record for
+that user/app/device is stale or orphaned, most often after a device reset, app reinstall, or
+clearing Company Portal's storage without also clearing the affected app's own storage. Try, in
+order:
+
+1. On the device: clear storage/cache for the affected app itself, then for Intune Company Portal,
+   restart the device, and sign back in. This is local-only and touches nothing server-side.
+2. If it persists, dispatch `Inspect Intune MAM app registrations` (`upn`, optional
+   `app_id_filter`) - read-only, backed by `scripts/bootstrap/Get-CaCManagedAppRegistrations.ps1` -
+   to list the user's registrations and find the `deviceTag` for the stuck device.
+3. Dispatch `Wipe Intune MAM app registrations by device tag` (`upn`, `device_tag`, `confirm: true`)
+   - backed by `scripts/bootstrap/Invoke-CaCManagedAppWipe.ps1`, which calls Graph's documented
+   `wipeManagedAppRegistrationsByDeviceTag` action. This wipes every managed app registration
+   sharing that `deviceTag` for the user (i.e. every corporate-managed app container on that one
+   device) - not just the one app that was showing the error, since the MAM SDK correlates
+   registrations on the same device by `deviceTag`. It does not touch the user's account, mailbox,
+   files, personal app data, or other devices; each app re-registers and re-syncs from the cloud the
+   next time it is reopened and signed in.
