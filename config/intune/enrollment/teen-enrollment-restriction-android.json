@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Companion to teen-enrollment-restriction-android-for-work.json: blocks the legacy Android",
+    "device administrator enrollment path for teens too, so no Android MDM enrollment route is left",
+    "open. Teens stay on MAM-only app protection (android-app-protection-baseline.json), same as",
+    "adults. Priority is 3, not 2: priority must be unique per platformType, and priority 2 is",
+    "already held by adult-enrollment-restriction-android.json for this platformType."
+  ],
+  "name": "teen-enrollment-restriction-android",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-teen", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Teen Personal Devices (Android)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 3,
+    "platformType": "android",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}

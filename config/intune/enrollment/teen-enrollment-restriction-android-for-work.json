@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Teens use MAM-only app protection (see android-app-protection-baseline.json), which does not",
+    "require device enrollment or compliance (deviceComplianceRequired: false there), exactly like",
+    "the adult tier. Without this restriction, Company Portal offers to set up an Android Enterprise",
+    "Work Profile the moment a teen signs in - creating an unwanted managed container on a personal",
+    "phone. platformBlocked blocks Android Enterprise enrollment entirely for the teen tier; MAM app",
+    "protection for Outlook/OneDrive/Office/Edge/Teams is unaffected since it never enrolls the",
+    "device. Priority is 3, not 2: priority must be unique per platformType, and priority 2 is",
+    "already held by adult-enrollment-restriction-android-for-work.json for this platformType."
+  ],
+  "name": "teen-enrollment-restriction-android-for-work",
+  "resource": "deviceEnrollmentConfigurations",
+  "assignments": [{ "group": "sg-tier-teen", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+    "displayName": "CaC - Enrollment - Teen Personal Devices (Android for Work)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "priority": 3,
+    "platformType": "androidForWork",
+    "platformRestriction": {
+      "@odata.type": "microsoft.graph.deviceEnrollmentPlatformRestriction",
+      "platformBlocked": true,
+      "personalDeviceEnrollmentBlocked": true,
+      "blockedManufacturers": [],
+      "blockedSkus": []
+    }
+  }
+}
