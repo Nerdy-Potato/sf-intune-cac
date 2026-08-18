@@ -34,7 +34,7 @@ Two Entra applications, not one:
 
 Because the write credential is bound to the `production` environment subject, a pull request -
 including one that edits a workflow file - cannot obtain it. The environment's required reviewer is
-the final approval gate. Deploy also rejects commits that are not the merge commit of an approved
+the final approval gate. Deploy also rejects commits that are not the merge commit of a real merged
 pull request with a successful Plan run and unblocked plan artifact for that pull request's exact
 head commit. Manual dispatches
 must therefore select a reviewed commit on `main`; arbitrary branches and tags cannot apply.

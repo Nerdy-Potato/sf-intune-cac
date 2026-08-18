@@ -10,7 +10,7 @@ tenant that a human has not first seen as a plan**.
 | --- | --- |
 | Tenant | `nerdypotato.onmicrosoft.com` |
 | Licensing | Microsoft 365 E7 |
-| Change path | Pull request &rarr; plan &rarr; review &rarr; approved deployment |
+| Change path | Pull request &rarr; plan &rarr; review &rarr; approved deployment (production environment) |
 | Direct portal edits | Detected as drift every morning |
 
 ## How a change is made
@@ -18,11 +18,13 @@ tenant that a human has not first seen as a plan**.
 1. Edit JSON under [`config/`](config/).
 2. Open a pull request. **CI** validates the schemas and the tenant safety rules offline, and
    **Plan** signs in with a *read-only* identity and comments the exact diff on the pull request.
-3. Someone reads the plan and approves the pull request.
+3. Someone reads the plan. A peer approval on the pull request is welcome but not required to
+   merge - this is a solo-maintained repository, and GitHub cannot let a maintainer approve their
+   own pull request, so Deploy does not gate on PR approval.
 4. Merging to `main` runs **Deploy**. Before it reaches the `production` GitHub environment, Deploy
-   verifies that the commit is the merge commit of that reviewed pull request and that its exact
-   head commit passed **Plan**. The environment's required reviewer is still the final write gate.
-   Only Deploy holds a write credential.
+   verifies that the commit is the merge commit of a real pull request and that its exact head
+   commit passed **Plan** with a valid, unexpired plan artifact. The environment's required
+   reviewer is still the final write gate. Only Deploy holds a write credential.
 
 Nothing else has permission to write to the tenant. A manually dispatched Deploy must select a
 reviewed commit on `main`; branches and tags are rejected. Deletions are never carried out unless a

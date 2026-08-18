@@ -26,10 +26,15 @@ section with a global unmanaged-object bypass.
 
 ### Solo-maintainer recovery deploy
 
-If the repository's sole maintainer has a reviewed commit on `main` but GitHub cannot accept a
-self-approval review, use `./scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1`. It looks up the most
-recent successful `plan.yml` run for the reviewed commit and dispatches `deploy.yml` in the
-repository's documented `workflow_dispatch` recovery mode.
+Deploy's push-triggered path no longer requires a peer-approved pull request - GitHub can never
+let a maintainer approve their own pull request, so a successful Plan run tied to the merged
+commit, the merge-commit check, and the `production` environment's required reviewer are what
+gate a normal deploy now. Use `./scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1` instead when you
+need to (re)dispatch a deploy for an already-reviewed commit without pushing a new one - for
+example, redeploying after out-of-band tenant remediation, or re-running a deploy whose automatic
+push-triggered run did not fire. It looks up the most recent successful `plan.yml` run for the
+reviewed commit and dispatches `deploy.yml` in the repository's documented `workflow_dispatch`
+recovery mode.
 
 This does **not** bypass plan quality or environment protection. The reviewed plan still has to be
 `Ready`, the deploy workflow still verifies the reviewed SHA and plan artifact lineage, and the
