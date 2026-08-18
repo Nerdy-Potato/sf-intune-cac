@@ -1,0 +1,64 @@
+name: Wipe Intune MAM app registrations by device tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      upn:
+        description: 'User principal name to remediate (e.g. robin@spaid.family)'
+        type: string
+        required: true
+      device_tag:
+        description: 'deviceTag from Inspect Intune MAM app registrations, identifying the stuck device'
+        type: string
+        required: true
+      confirm:
+        description: 'Explicitly confirm wiping every managed app registration on this device tag'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: wipe-managed-app-registrations
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    name: Wipe managed app registrations for a user/device
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require explicit confirmation
+        shell: pwsh
+        run: |
+          if ('${{ inputs.confirm }}' -ne 'true') {
+            throw 'Managed app registration wipe requires confirm=true.'
+          }
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Wipe managed app registrations
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          Set-StrictMode -Version Latest
+          # -Confirm:$false disables the interactive ShouldProcess prompt, which has no
+          # interactive host to attach to on the runner and throws a null-reference error.
+          # The "Require explicit confirmation" step above (gated on inputs.confirm) is the
+          # real authorization gate for this solo-maintainer remediation workflow.
+          ./scripts/bootstrap/Invoke-CaCManagedAppWipe.ps1 -Upn '${{ inputs.upn }}' -DeviceTag '${{ inputs.device_tag }}' -Confirm:$false

@@ -1,0 +1,53 @@
+name: Inspect Intune MAM app registrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      upn:
+        description: 'User principal name to inspect (e.g. robin@spaid.family)'
+        type: string
+        required: true
+      app_id_filter:
+        description: 'Optional substring to filter by packageId/bundleId (e.g. outlook)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: inspect-managed-app-registrations
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: List managed app registrations for a user
+    runs-on: ubuntu-latest
+    environment: plan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_PLAN_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: List registrations
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: |
+          Set-StrictMode -Version Latest
+          $params = @{ Upn = '${{ inputs.upn }}' }
+          $filter = '${{ inputs.app_id_filter }}'
+          if (-not [string]::IsNullOrWhiteSpace($filter)) {
+            $params.AppIdFilter = $filter
+          }
+          ./scripts/bootstrap/Get-CaCManagedAppRegistrations.ps1 @params
