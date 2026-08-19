@@ -21,15 +21,14 @@ tenant that a human has not first seen as a plan**.
 3. Someone reads the plan. A peer approval on the pull request is welcome but not required to
    merge - this is a solo-maintained repository, and GitHub cannot let a maintainer approve their
    own pull request, so Deploy does not gate on PR approval.
-4. Merging to `main` runs **Deploy**. Before it reaches the `production` GitHub environment, Deploy
-   verifies that the commit is the merge commit of a real pull request and that its exact head
-   commit passed **Plan** with a valid, unexpired plan artifact. The environment's required
-   reviewer is still the final write gate. Only Deploy holds a write credential.
+4. Merging (or pushing directly) to `main` runs **Deploy**. It plans and applies against that
+   commit, refusing to apply if the plan is blocked (skipped/prerequisite actions). The
+   `production` GitHub environment's required reviewer is the final write gate. Only Deploy holds
+   a write credential.
 
-Nothing else has permission to write to the tenant. A manually dispatched Deploy must select a
-reviewed commit on `main`; branches and tags are rejected. Deletions are never carried out unless a
-human explicitly starts that deployment with `allow_delete`. The solo-maintainer recovery path is
-documented in [docs/operations.md](docs/operations.md).
+Nothing else has permission to write to the tenant. A manually dispatched Deploy runs against
+whatever is on `main` at the time. Deletions are never carried out unless a human explicitly
+starts that deployment with `allow_delete`.
 
 ## Layout
 

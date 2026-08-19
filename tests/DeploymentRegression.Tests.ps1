@@ -9,7 +9,6 @@ BeforeAll {
     $script:DriftWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/drift.yml') -Raw
     $script:CiWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/ci.yml') -Raw
     $script:Bootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1') -Raw
-    $script:SoloRecoveryBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1') -Raw
     $script:StuckAppBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Remove-CaCStuckApp.ps1') -Raw
     $script:StuckAppWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/remediate-stuck-app.yml') -Raw
     $script:IosGsa = Get-Content -Path (Join-Path $script:RepoRoot 'config/intune/device-configuration/ios-gsa-child.json') -Raw |
@@ -270,21 +269,19 @@ Describe 'Workflow trigger and permission safety' {
 
     It 'requires the production environment and defaults deletion approval to false' {
         $script:DeployWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
-        $script:DeployWorkflow | Should -Match 'confirm_deploy:'
-        $script:DeployWorkflow | Should -Match 'reviewed_sha:'
-        $script:DeployWorkflow | Should -Match 'plan_run_id:'
-        $script:DeployWorkflow | Should -Match 'Recovery deployment requires confirm_deploy=true'
+        $script:DeployWorkflow | Should -Not -Match 'confirm_deploy:'
+        $script:DeployWorkflow | Should -Not -Match 'reviewed_sha:'
+        $script:DeployWorkflow | Should -Not -Match 'plan_run_id:'
         $script:DeployWorkflow | Should -Match '(?is)allow_delete:.*?default:\s*false'
         $script:DeployWorkflow | Should -Match '(?m)^\s*contents:\s*read\s*$'
         $script:DeployWorkflow | Should -Match '(?m)^\s*id-token:\s*write\s*$'
         $script:DeployWorkflow | Should -Not -Match 'pull-requests:\s*write'
     }
 
-    It 'fails closed when the reviewed plan artifact is missing or skipped' {
+    It 'fails closed when the plan is missing or contains skipped/blocked actions' {
         $script:Entrypoint | Should -Match 'Reviewed plan artifact was not found'
         $script:Entrypoint | Should -Match 'Status -ne ''Ready'''
         $script:Entrypoint | Should -Match 'ExpectedCommitSha is required for apply'
-        $script:DeployWorkflow | Should -Match 'Download reviewed plan'
         $script:DeployWorkflow | Should -Match 'Invoke-CaC\.ps1\s+-Mode verify'
         $script:DriftWorkflow | Should -Match '\$document\.Actions'
         $script:DriftWorkflow | Should -Match '\$document\.Status\s+-ne\s+''Ready'''
@@ -316,14 +313,6 @@ Describe 'Workflow trigger and permission safety' {
 }
 
 Describe 'Bootstrap and managed-object safety' {
-    It 'documents the solo-maintainer recovery deploy inputs explicitly' {
-        $script:SoloRecoveryBootstrap | Should -Match "'workflow',\s*'run',\s*'deploy\.yml'"
-        $script:SoloRecoveryBootstrap | Should -Match "confirm_deploy=true"
-        $script:SoloRecoveryBootstrap | Should -Match 'reviewed_sha=\$CommitSha'
-        $script:SoloRecoveryBootstrap | Should -Match 'plan_run_id=\$\(\$matchingRun\.databaseId\)'
-        $script:SoloRecoveryBootstrap | Should -Match 'allow_delete=\$allowDeleteValue'
-    }
-
     It 'uses an unconditional connect rule for the iOS GSA profile' {
         @($script:IosGsa.payload.onDemandRules).action | Should -Contain 'connect'
         $script:IosGsa.payload.onDemandRules | ConvertTo-Json -Depth 10 |
