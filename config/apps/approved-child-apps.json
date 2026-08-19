@@ -25,7 +25,12 @@
     "to the new 'microsoft-copilot' slug, same numeric app id, so it still works) - Graph rejects PATCH",
     "requests that change an existing iosStoreApp's appStoreUrl ('AppStoreUrl cannot be patched'), so",
     "updating the slug in config breaks deploy for an object that already exists in the tenant. displayName",
-    "is still updated to 'Microsoft Copilot' since that field is patchable."
+    "is still updated to 'Microsoft Copilot' since that field is patchable.",
+    "2026-08-19: ios-onedrive's appStoreUrl has a trailing '?uo=4' query param, matching what the Intune",
+    "portal's app picker attached when the object was manually re-created after an accidental deletion.",
+    "Update never PATCHes appStoreUrl for an iosStoreApp (see the appStoreUrl note above), so this would",
+    "otherwise show as permanent, never-resolving drift in every future plan; matching the live value",
+    "here instead is harmless since Deploy already treats that field as immutable post-creation."
   ],
   "apps": [
     {
@@ -391,7 +396,7 @@
         "description": "Approved Microsoft OneDrive client. Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "bundleId": "com.microsoft.skydrive",
-        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-onedrive/id477537958",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-onedrive/id477537958?uo=4",
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
