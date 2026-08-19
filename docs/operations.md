@@ -6,9 +6,9 @@
 2. **CI** validates schemas and safety rules offline and runs the tests. **Plan** comments the diff.
 3. Read the plan. In particular read the *assignment* rows: a one-line edit that changes who a
    policy targets is the change most likely to interrupt somebody's day.
-4. Merge. Deploy verifies the merged commit against the reviewed pull request, downloads that
-   pull request's exact `plan` artifact, and rejects missing, blocked, or mismatched plan identity
-   before asking for approval in the `production` environment.
+4. Merge. Deploy plans and applies directly against the merged commit, refusing to apply if the
+   plan is blocked (skipped/prerequisite actions), before asking for approval in the `production`
+   environment.
 
 An apply is successful only when every requested action is applied. Unmanaged identity conflicts,
 missing prerequisites, and write failures are reported in the applied plan and fail the deployment;
@@ -24,29 +24,15 @@ managed marker and that existing membership remains intact, then remove `adoptio
 `config/tenant.json` through a reviewed pull request. A mismatch remains blocked; never replace this
 section with a global unmanaged-object bypass.
 
-### Solo-maintainer recovery deploy
+### Re-running a deploy
 
-Deploy's push-triggered path no longer requires a peer-approved pull request - GitHub can never
-let a maintainer approve their own pull request, so a successful Plan run tied to the merged
-commit, the merge-commit check, and the `production` environment's required reviewer are what
-gate a normal deploy now. Use `./scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1` instead when you
-need to (re)dispatch a deploy for an already-reviewed commit without pushing a new one - for
+Deploy runs on every push to `main` and can also be re-run manually (`workflow_dispatch`) - for
 example, redeploying after out-of-band tenant remediation, or re-running a deploy whose automatic
-push-triggered run did not fire. It looks up the most recent successful `plan.yml` run for the
-reviewed commit and dispatches `deploy.yml` in the repository's documented `workflow_dispatch`
-recovery mode.
-
-This does **not** bypass plan quality or environment protection. The reviewed plan still has to be
-`Ready`, the deploy workflow still verifies the reviewed SHA and plan artifact lineage, and the
-`production` environment reviewer gate still has to approve the write job.
-
-```powershell
-./scripts/bootstrap/Invoke-SoloRecoveryDeploy.ps1 -CommitSha <reviewed-pr-head-sha>
-```
-
-Deploy never regenerates a live plan with the write credential. Apply consumes only the reviewed
-artifact, whose commit and deterministic action hash are verified before any tenant connection is
-opened.
+push-triggered run did not fire. There's no separate recovery procedure: it plans and applies
+against whatever is on `main` at the time it runs, and still refuses to apply a blocked plan
+(skipped/prerequisite actions). The `production` environment's approval gate (configured in
+GitHub, not this repo's workflow code) is the control to use if you want a manual check before
+apply - see [bootstrap.md](bootstrap.md) for setting that up.
 
 ### Stuck Intune app remediation
 

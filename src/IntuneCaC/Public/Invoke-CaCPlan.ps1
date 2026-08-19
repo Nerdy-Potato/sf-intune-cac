@@ -445,7 +445,17 @@ function Invoke-CaCPlan {
             }
 
             try {
-                & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($updateAppAction.Data.Id)" $app.payload | Out-Null
+                # #microsoft.graph.iosStoreApp permanently rejects any PATCH that includes
+                # AppStoreUrl - even re-sending its current, unchanged value counts as "patching"
+                # it and Graph returns 400 "property 'AppStoreUrl' cannot be patched". Drop it from
+                # the update payload; Create (above) still sends it, since it's required and
+                # accepted there. This is distinct from the Android quirk caught below.
+                $updatePayload = $app.payload
+                if ($updatePayload.'@odata.type' -eq '#microsoft.graph.iosStoreApp' -and $updatePayload.ContainsKey('appStoreUrl')) {
+                    $updatePayload = $updatePayload.Clone()
+                    $updatePayload.Remove('appStoreUrl')
+                }
+                & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($updateAppAction.Data.Id)" $updatePayload | Out-Null
             }
             catch {
                 # Same legacy Managed Google Play API restriction handled in the Adopt step above:

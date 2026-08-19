@@ -10,19 +10,6 @@ on:
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
     inputs:
-      confirm_deploy:
-        description: 'Explicitly confirm deployment of the reviewed merged commit'
-        type: boolean
-        required: true
-        default: false
-      reviewed_sha:
-        description: 'Head SHA used by the successful Plan workflow'
-        type: string
-        required: true
-      plan_run_id:
-        description: 'Successful Plan workflow run ID containing the reviewed artifact'
-        type: string
-        required: true
       allow_delete:
         description: 'Delete tenant objects that this repository owns but no longer defines'
         type: boolean
@@ -37,204 +24,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
-    name: Verify reviewed commit
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    outputs:
-      plan_run_id: ${{ steps.review.outputs.plan_run_id }}
-      reviewed_sha: ${{ steps.review.outputs.reviewed_sha }}
-      plan_id: ${{ steps.artifact.outputs.plan_id }}
-    permissions:
-      contents: read
-      pull-requests: read
-      actions: read
-    steps:
-      # Full history is required so the recovery-mode lineage check below can run
-      # `git merge-base --is-ancestor` locally instead of calling the GitHub REST
-      # "compare two commits" endpoint, which has proven unreliable (404s, including
-      # for trivial base==head self-compares) for this repository.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Require a reviewed pull request and successful plan
-        id: review
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const sha = context.sha;
-            const { owner, repo } = context.repo;
-            const recovery = context.eventName === 'workflow_dispatch';
-            if (recovery && '${{ inputs.confirm_deploy }}' !== 'true') {
-              core.setFailed('Recovery deployment requires confirm_deploy=true.');
-              return;
-            }
-            // Note: github.rest.repos.listPullRequestsAssociatedWithCommit only finds PRs
-            // whose *original* commits are being looked up. A squash-merge commit landing
-            // on main is a brand-new synthetic commit that was never part of the PR's own
-            // commit list, so that endpoint reliably returns [] for it -- this repository
-            // always squash-merges (see gh pr merge --squash usage), so that lookup would
-            // never succeed for the non-recovery (push-triggered) path. Instead, list
-            // closed pull requests directly and match on the field we actually need.
-            const closedPullRequests = await github.paginate(
-              github.rest.pulls.list,
-              {
-                owner,
-                repo,
-                state: 'closed',
-                base: 'main',
-                sort: 'updated',
-                direction: 'desc',
-                per_page: 100
-              }
-            );
-            const pullRequest = closedPullRequests.find(pr =>
-              pr.merged_at &&
-              (recovery
-                ? pr.head.sha === '${{ inputs.reviewed_sha }}'
-                : pr.merge_commit_sha === sha)
-            );
-
-            if (!pullRequest) {
-              core.setFailed(
-                `Commit ${sha} is not the merge commit of a pull request. ` +
-                'Deployments must come from a reviewed pull request.'
-              );
-              return;
-            }
-
-            if (recovery) {
-              // Verify locally (via the full-history checkout above) that the reviewed
-              // merge commit is an ancestor of (or equal to) the current main tip. This
-              // replaces a REST "compare two commits" call that proved unreliable for
-              // this repository (404s even on trivial base==head self-compares).
-              let isAncestor = true;
-              try {
-                await exec.exec('git', ['merge-base', '--is-ancestor', pullRequest.merge_commit_sha, sha]);
-              } catch (error) {
-                isAncestor = false;
-              }
-              if (!isAncestor) {
-                core.setFailed(
-                  `Current main commit ${sha} does not contain reviewed merge commit ${pullRequest.merge_commit_sha}.`
-                );
-                return;
-              }
-            }
-
-            const planRuns = recovery
-              ? [{ id: Number('${{ inputs.plan_run_id }}'), conclusion: 'success' }]
-              : await github.paginate(
-                  github.rest.actions.listWorkflowRuns,
-                  {
-                    owner,
-                    repo,
-                    workflow_id: 'plan.yml',
-                    head_sha: pullRequest.head.sha,
-                    event: 'pull_request',
-                    status: 'completed',
-                    per_page: 100
-                  }
-                );
-
-            const candidates = planRuns
-              .filter(run =>
-                run.conclusion === 'success' &&
-                (recovery || new Date(run.created_at) <= new Date(pullRequest.merged_at))
-              )
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-            let selectedRun = null;
-            for (const run of candidates) {
-              const artifacts = await github.paginate(
-                github.rest.actions.listWorkflowRunArtifacts,
-                { owner, repo, run_id: run.id, per_page: 100 }
-              );
-              const planArtifact = artifacts.find(artifact =>
-                artifact.name === 'plan' && !artifact.expired && artifact.size_in_bytes > 0
-              );
-              if (planArtifact) {
-                selectedRun = run;
-                break;
-              }
-            }
-
-            if (!selectedRun) {
-              core.setFailed(
-                `No successful Plan workflow run with a reviewed plan artifact was found for pull request #${pullRequest.number}.`
-              );
-              return;
-            }
-
-            core.setOutput('plan_run_id', String(selectedRun.id));
-            core.setOutput('reviewed_sha', pullRequest.head.sha);
-            core.notice(`Using reviewed pull request #${pullRequest.number} at ${pullRequest.head.sha} and Plan run ${selectedRun.id}.`);
-
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.review.outputs.reviewed_sha }}
-
-      - name: Download reviewed plan
-        uses: actions/download-artifact@v4
-        with:
-          name: plan
-          run-id: ${{ steps.review.outputs.plan_run_id }}
-          path: reviewed-plan
-          github-token: ${{ github.token }}
-
-      - name: Verify reviewed plan artifact
-        id: artifact
-        shell: pwsh
-        env:
-          REVIEWED_PLAN_COMMIT: ${{ steps.review.outputs.reviewed_sha }}
-        run: |
-          ./scripts/Invoke-CaC.ps1 -Mode verify `
-            -PlanPath ./reviewed-plan/plan.json `
-            -ExpectedCommitSha $env:REVIEWED_PLAN_COMMIT
-          $document = Get-Content -Path ./reviewed-plan/plan.json -Raw | ConvertFrom-Json
-          "plan_id=$($document.PlanId)" | Add-Content -Path $env:GITHUB_OUTPUT
-
   deploy:
-    name: Apply to the tenant
-    if: github.ref == 'refs/heads/main'
-    needs: verify
+    name: Plan and apply to the tenant
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
       id-token: write
-      actions: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Download reviewed plan
-        uses: actions/download-artifact@v4
-        with:
-          name: plan
-          run-id: ${{ needs.verify.outputs.plan_run_id }}
-          path: out
-          github-token: ${{ github.token }}
 
       - name: Validate configuration
         shell: pwsh
         run: ./scripts/Invoke-CaC.ps1 -Mode validate
+
+      - name: Plan (read-only)
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: ./scripts/Invoke-CaC.ps1 -Mode plan
+
+      - name: Refuse to apply a blocked plan
+        shell: pwsh
+        run: |
+          ./scripts/Invoke-CaC.ps1 -Mode verify `
+            -PlanPath ./out/plan.json `
+            -ExpectedCommitSha ${{ github.sha }}
 
       - name: Apply
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
-          REVIEWED_PLAN_COMMIT: ${{ needs.verify.outputs.reviewed_sha }}
-          REVIEWED_PLAN_ID: ${{ needs.verify.outputs.plan_id }}
         run: |
           $allowDelete = '${{ inputs.allow_delete }}' -eq 'true'
           ./scripts/Invoke-CaC.ps1 -Mode apply -AllowDelete:$allowDelete `
             -PlanPath ./out/plan.json `
-            -ExpectedCommitSha $env:REVIEWED_PLAN_COMMIT `
-            -ExpectedPlanId $env:REVIEWED_PLAN_ID
+            -ExpectedCommitSha ${{ github.sha }}
 
       - name: Upload applied plan
         if: always()

@@ -157,19 +157,25 @@ function New-CaCPlan {
     $appMarker = 'Managed by sf-intune-cac.'
     foreach ($app in $Configuration.Apps) {
         $remoteCandidates = @(Get-CaCRemoteAppCandidates -App $app -RemoteApps $remoteApps)
+
+        # Fail closed on ANY ambiguity, not just during one-time adoption: if more than one live
+        # app shares this app's immutable package/bundle identity, silently picking the first one
+        # (via Select-Object -First 1 below) would mean drift-checking and updating one copy every
+        # run while the rest sit forever untouched and undetected - exactly how duplicate iOS apps
+        # accumulated unnoticed in this tenant. Surface the ambiguity and stop instead of guessing.
+        if ($remoteCandidates.Count -gt 1) {
+            Add-Action -Kind 'App' -Action 'Skip' -Target $app.payload.displayName -Data $app -Details @(
+                "more than one existing app ($($remoteCandidates.Count)) shares this app's immutable package or bundle identity; resolve the duplicates in Intune before Deploy can manage this app safely"
+            )
+            continue
+        }
+
         $remote = $remoteCandidates | Select-Object -First 1
         $adoptionSpec = Get-CaCAdoptionSpec -Configuration $Configuration -Kind App -Id $app.id
         $adopted = $false
         $alreadyManaged = $remote -and (Test-CaCManagedObject -Object $remote -ManagedMarker $appMarker)
 
         if ($adoptionSpec -and -not $alreadyManaged) {
-            if ($remoteCandidates.Count -gt 1) {
-                Add-Action -Kind 'App' -Action 'Skip' -Target $app.payload.displayName -Data $app -Details @(
-                    'one-time adoption is fail-closed: more than one app has the configured immutable package or bundle identity'
-                )
-                continue
-            }
-
             if ($remote -and (Test-CaCAdoptionAppIdentity -Object $remote -Spec $adoptionSpec)) {
                 $adopted = $true
                 $appObjectIds[$app.id] = $remote.id
