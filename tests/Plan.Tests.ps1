@@ -709,7 +709,10 @@ Describe 'Invoke-CaCPlan' {
         $updateAction | Should -Not -BeNullOrEmpty
 
         $applyState = New-FakeTenant -InSync
-        ($applyState.Apps | Where-Object { $_.bundleId -eq $copilot.payload.bundleId }).description = $remoteCopilot.description
+        $applyCopilot = $applyState.Apps | Where-Object {
+            $_.PSObject.Properties['bundleId'] -and $_.bundleId -eq $copilot.payload.bundleId
+        } | Select-Object -First 1
+        $applyCopilot.description = $remoteCopilot.description
         $applyInvoker = New-FakeInvoker -State $applyState
 
         $null = Invoke-CaCPlan -Plan @($updateAction) -Configuration $script:Config -GraphInvoker $applyInvoker -Confirm:$false
