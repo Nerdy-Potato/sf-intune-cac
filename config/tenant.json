@@ -6,6 +6,12 @@
   "environment": "production",
   "managedMarker": "Managed by sf-intune-cac. Do not edit in the portal.",
   "namePrefix": "CaC",
+  "comment": [
+    "2026-08-19: Microsoft renamed 'Microsoft 365 Copilot' to 'Microsoft Copilot' in place (packageId",
+    "unchanged) as part of the consumer/work Copilot app merger. Renamed the adoption spec id to",
+    "'android-copilot' and updated its displayName to match the live object, resolving a fail-closed",
+    "one-time adoption Skip caused by the display name no longer matching."
+  ],
   "adoption": {
     "oneTime": true,
     "enabled": true,
@@ -33,8 +39,8 @@
         "identity": { "kind": "packageId", "value": "com.microsoft.scmx" }
       },
       {
-        "id": "android-m365-copilot",
-        "displayName": "Microsoft 365 Copilot",
+        "id": "android-copilot",
+        "displayName": "Microsoft Copilot",
         "odataType": "#microsoft.graph.androidManagedStoreApp",
         "identity": { "kind": "packageId", "value": "com.microsoft.office.officehubrow" }
       },

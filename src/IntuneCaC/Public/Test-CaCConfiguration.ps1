@@ -106,7 +106,7 @@ function Test-CaCConfiguration {
         # Keep in sync with the guard list in src/IntuneCaC/Private/Get-CaCAdoption.ps1.
         $allowedAppIds = @(
             'android-authenticator', 'ios-authenticator',
-            'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
+            'android-defender', 'android-copilot', 'android-word', 'android-excel',
             'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
             'android-onedrive', 'android-edge',
             'android-spotify-kids', 'android-moonlight', 'android-steam-link',
