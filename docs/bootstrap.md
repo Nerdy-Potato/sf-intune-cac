@@ -136,7 +136,7 @@ than an hour with no other explanation), approve every package once:
    | Display name | Package ID |
    | --- | --- |
    | Microsoft Defender | `com.microsoft.scmx` |
-   | Microsoft 365 Copilot | `com.microsoft.office.officehubrow` |
+   | Microsoft Copilot | `com.microsoft.office.officehubrow` |
    | Microsoft Word | `com.microsoft.office.word` |
    | Microsoft Excel | `com.microsoft.office.excel` |
    | Microsoft PowerPoint | `com.microsoft.office.powerpoint` |

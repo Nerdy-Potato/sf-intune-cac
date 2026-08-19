@@ -17,7 +17,7 @@ function Get-CaCAdoptionSpec {
     )
     $adoptableAppIds = @(
         'android-authenticator', 'ios-authenticator',
-        'android-defender', 'android-m365-copilot', 'android-word', 'android-excel',
+        'android-defender', 'android-copilot', 'android-word', 'android-excel',
         'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
         'android-onedrive', 'android-edge',
         'android-spotify-kids', 'android-moonlight', 'android-steam-link',

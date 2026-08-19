@@ -12,7 +12,15 @@
     "cleanly in plan mode, but blocks the reviewed-plan deployment gate entirely (it counts the same",
     "as Skip) - so no Windows entry should be added to this catalog until its Intune bootstrap step",
     "is done. Moonlight/Windows App/Xbox for Windows are intentionally deferred for this reason; see",
-    "the sg-nuclear-family decision log for the bootstrap steps to add them in a follow-up."
+    "the sg-nuclear-family decision log for the bootstrap steps to add them in a follow-up.",
+    "2026-08-19: Microsoft merged the consumer Copilot app and the Microsoft 365 Copilot (work or school)",
+    "app into a single unified 'Microsoft Copilot' app (rollout started August 2026). The rebrand updates",
+    "the existing app entries in place - Google Play/App Store confirm the packageId/bundleId are",
+    "unchanged - so renamed 'android-m365-copilot'/'ios-m365-copilot' to 'android-copilot'/'ios-copilot'",
+    "and updated displayName to 'Microsoft Copilot' on both to match the live app identity. This also",
+    "fixes deploys blocking on fail-closed one-time adoption for the Android entry, whose live tenant",
+    "object's displayName had already been renamed by the Play Store update, no longer matching the old",
+    "configured displayName."
   ],
   "apps": [
     {
@@ -31,13 +39,13 @@
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
-      "id": "android-m365-copilot",
+      "id": "android-copilot",
       "platform": "android",
       "source": "managedGooglePlay",
       "payload": {
         "@odata.type": "#microsoft.graph.androidManagedStoreApp",
-        "displayName": "Microsoft 365 Copilot",
-        "description": "Approved Microsoft 365 productivity and Copilot client. Managed by sf-intune-cac.",
+        "displayName": "Microsoft Copilot",
+        "description": "Approved unified Microsoft Copilot client (formerly Microsoft 365 Copilot; merged with the consumer Copilot app in August 2026). Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "packageId": "com.microsoft.office.officehubrow",
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.office.officehubrow",
@@ -257,16 +265,16 @@
       "assignments": []
     },
     {
-      "id": "ios-m365-copilot",
+      "id": "ios-copilot",
       "platform": "ios",
       "source": "iosStore",
       "payload": {
         "@odata.type": "#microsoft.graph.iosStoreApp",
-        "displayName": "Microsoft 365 Copilot",
-        "description": "Approved Microsoft 365 productivity and Copilot client. Managed by sf-intune-cac.",
+        "displayName": "Microsoft Copilot",
+        "description": "Approved unified Microsoft Copilot client (formerly Microsoft 365 Copilot; merged with the consumer Copilot app in August 2026). Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "bundleId": "com.microsoft.officemobile",
-        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-365-copilot/id541164041",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-copilot/id541164041",
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
