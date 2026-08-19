@@ -346,6 +346,35 @@ Describe 'New-CaCPlan' {
         }
     }
 
+    Context 'when more than one existing app shares the same store identity' {
+        It 'skips the app instead of silently picking one, even when the app is already managed' {
+            $state = New-FakeTenant -InSync
+            $defender = $script:Config.Apps | Where-Object id -EQ 'android-defender'
+            $managed = $state.Apps | Where-Object {
+                $_.PSObject.Properties['packageId'] -and $_.packageId -eq $defender.payload.packageId
+            } |
+                Select-Object -First 1
+
+            # Simulate a second, already-managed duplicate of the same app - the exact shape that
+            # let duplicate iOS apps accumulate unnoticed: every prior run picked one of the
+            # duplicates via Select-Object -First 1 and never reported the ambiguity.
+            $duplicate = $managed.PSObject.Copy()
+            $duplicate.id = 'duplicate-of-managed-app'
+            $state.Apps += $duplicate
+
+            $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+            # Filter by the config app's own id (not displayName - Android and iOS "Microsoft
+            # Defender" share a display name but are different config entries with different ids).
+            $defenderAction = @($plan | Where-Object {
+                    $_.Kind -eq 'App' -and ($_.Data.id -eq $defender.id -or $_.Data.App.id -eq $defender.id)
+                })
+
+            $defenderAction.Count | Should -Be 1
+            $defenderAction[0].Action | Should -Be 'Skip'
+            $defenderAction[0].Details -join ' ' | Should -BeLike '*more than one existing app*resolve the duplicates*'
+        }
+    }
+
     Context 'when the configured bootstrap objects already exist without a marker' {
         BeforeAll {
             $script:AdoptionState = New-FakeTenant -InSync
@@ -664,6 +693,31 @@ Describe 'Invoke-CaCPlan' {
 
         @($results | Where-Object Status -in @('Failed', 'Skipped')) | Should -BeNullOrEmpty
         @($applyState.Calls | Where-Object Method -NE 'GET') | Should -Not -BeNullOrEmpty
+    }
+
+    It 'never sends appStoreUrl in an iosStoreApp update PATCH, even when only description drifted' {
+        $state = New-FakeTenant -InSync
+        $copilot = $script:Config.Apps | Where-Object id -EQ 'ios-copilot'
+        $remoteCopilot = $state.Apps | Where-Object {
+            $_.PSObject.Properties['bundleId'] -and $_.bundleId -eq $copilot.payload.bundleId
+        } | Select-Object -First 1
+        $remoteCopilot.description = 'stale description from before this app was managed. Managed by sf-intune-cac.'
+
+        $invoker = New-FakeInvoker -State $state
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $invoker
+        $updateAction = $plan | Where-Object { $_.Kind -eq 'App' -and $_.Target -eq $copilot.payload.displayName -and $_.Action -eq 'Update' }
+        $updateAction | Should -Not -BeNullOrEmpty
+
+        $applyState = New-FakeTenant -InSync
+        ($applyState.Apps | Where-Object { $_.bundleId -eq $copilot.payload.bundleId }).description = $remoteCopilot.description
+        $applyInvoker = New-FakeInvoker -State $applyState
+
+        $null = Invoke-CaCPlan -Plan @($updateAction) -Configuration $script:Config -GraphInvoker $applyInvoker -Confirm:$false
+
+        $patchCall = $applyState.Calls | Where-Object { $_.Method -eq 'PATCH' -and $_.Uri -like "deviceAppManagement/mobileApps/$($remoteCopilot.id)" }
+        $patchCall | Should -Not -BeNullOrEmpty
+        $patchCall.Body.ContainsKey('appStoreUrl') | Should -BeFalse -Because 'Graph rejects any PATCH to an iosStoreApp that includes appStoreUrl, even unchanged'
+        $patchCall.Body.displayName | Should -Be $copilot.payload.displayName
     }
 
     It 'waits for a store app to reach the published state before assigning it' {
