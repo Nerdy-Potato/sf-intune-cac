@@ -3,11 +3,15 @@
   "comment": [
     "Strictest Windows tier (13 and under). The Store is blocked so that software arrives only",
     "through explicitly approved Intune app assignments, SmartScreen app-install control is on,",
-    "and InPrivate browsing is blocked so that web filtering telemetry is meaningful."
+    "and InPrivate browsing is blocked so that web filtering telemetry is meaningful.",
+    "2026-08-18: moved assignment from sg-tier-child to sg-devices-child because this is a corporate-owned",
+    "device restriction baseline and should target the dedicated child device group, not the user identity",
+    "tier group. Also set bluetoothBlockAdvertising to false per owner request and confirmed this baseline",
+    "does not block admin device-location capability."
   ],
   "name": "windows-restrictions-child",
   "resource": "deviceConfigurations",
-  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "assignments": [{ "group": "sg-devices-child", "intent": "include" }],
   "payload": {
     "@odata.type": "#microsoft.graph.windows10GeneralConfiguration",
     "displayName": "CaC - Windows - Device Restrictions (Child)",
@@ -34,6 +38,6 @@
     "settingsBlockSystemPage": true,
     "settingsBlockDevicesPage": true,
     "storageRequireMobileDeviceEncryption": true,
-    "bluetoothBlockAdvertising": true
+    "bluetoothBlockAdvertising": false
   }
 }
