@@ -20,7 +20,12 @@
     "and updated displayName to 'Microsoft Copilot' on both to match the live app identity. This also",
     "fixes deploys blocking on fail-closed one-time adoption for the Android entry, whose live tenant",
     "object's displayName had already been renamed by the Play Store update, no longer matching the old",
-    "configured displayName."
+    "configured displayName.",
+    "2026-08-19: left the iOS entry's appStoreUrl on the old 'microsoft-365-copilot' slug (it 301-redirects",
+    "to the new 'microsoft-copilot' slug, same numeric app id, so it still works) - Graph rejects PATCH",
+    "requests that change an existing iosStoreApp's appStoreUrl ('AppStoreUrl cannot be patched'), so",
+    "updating the slug in config breaks deploy for an object that already exists in the tenant. displayName",
+    "is still updated to 'Microsoft Copilot' since that field is patchable."
   ],
   "apps": [
     {
@@ -274,7 +279,7 @@
         "description": "Approved unified Microsoft Copilot client (formerly Microsoft 365 Copilot; merged with the consumer Copilot app in August 2026). Managed by sf-intune-cac.",
         "publisher": "Microsoft Corporation",
         "bundleId": "com.microsoft.officemobile",
-        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-copilot/id541164041",
+        "appStoreUrl": "https://apps.apple.com/us/app/microsoft-365-copilot/id541164041",
         "applicableDeviceType": { "iPad": true, "iPhoneAndIPod": true },
         "minimumSupportedOperatingSystem": { "v16_0": true }
       },
