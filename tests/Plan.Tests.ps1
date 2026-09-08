@@ -76,7 +76,10 @@ BeforeAll {
             }
 
             foreach ($policy in $script:Config.Policies | Where-Object {
-                    $null -ne $_.PSObject.Properties['targetApps']
+                    # $script:Config.Policies entries are Hashtables, so PSObject.Properties never
+                    # enumerates their keys - ContainsKey is the only reliable presence check here
+                    # (same convention already used elsewhere in this file, e.g. near line 1055).
+                    $_.ContainsKey('targetApps')
                 }) {
                 $policyObjects = @($state.Policies[$policy.resource])
                 $policyIndex = 0
@@ -87,10 +90,14 @@ BeforeAll {
                 $remotePolicy = $policyObjects[$policyIndex]
                 $targetIds = @($policy.targetApps | ForEach-Object {
                         $targetApp = $script:Config.Apps | Where-Object id -EQ $_
+                        # Only compare a field when both sides actually have it - an unqualified
+                        # -eq would treat two apps that both lack e.g. bundleId ($null -eq $null)
+                        # as a false match, which previously made every Android app resolve to
+                        # whichever entry happened to be first (Microsoft Defender).
                         ($state.Apps | Where-Object {
-                                $_.packageId -eq $targetApp.payload.packageId -or
-                                $_.bundleId -eq $targetApp.payload.bundleId -or
-                                $_.displayName -eq $targetApp.payload.displayName
+                                ($_.packageId -and $targetApp.payload.packageId -and $_.packageId -eq $targetApp.payload.packageId) -or
+                                ($_.PSObject.Properties['bundleId'] -and $targetApp.payload.bundleId -and $_.bundleId -eq $targetApp.payload.bundleId) -or
+                                ($_.displayName -eq $targetApp.payload.displayName)
                             } | Select-Object -First 1).id
                     })
                 $policyObjects[$policyIndex] = $remotePolicy | Add-Member -Force -PassThru `
@@ -130,19 +137,11 @@ BeforeAll {
                     return [pscustomobject]@{ value = @($State.Assignments[$policyId]) }
                 }
                 default {
+                    # targetedMobileApps (for any mobileAppConfigurations policy) is already set
+                    # generically by New-FakeTenant -InSync, so no per-resource special-casing is
+                    # needed here - the state objects are returned as-is.
                     $resource = ($Uri -split '/')[-1]
                     $objects = @($State.Policies[$resource])
-                    if ($resource -eq 'mobileAppConfigurations') {
-                        $objects = @($objects | ForEach-Object {
-                                if ($_.displayName -eq 'CaC - Android - Defender and GSA (Child)') {
-                                    $_ | Add-Member -Force -PassThru -NotePropertyName targetedMobileApps `
-                                        -NotePropertyValue @('app-1')
-                                }
-                                else {
-                                    $_
-                                }
-                            })
-                    }
                     return [pscustomobject]@{ value = $objects }
                 }
             }

@@ -72,11 +72,20 @@ catalog. If a child device operator manually turns on Private DNS, it can bypass
 Access's DNS-based visibility even with Always-on VPN lockdown enforced (lockdown blocks all
 non-tunneled traffic, but doesn't change what DNS resolution path the OS chooses inside the tunnel).
 The only documented way to enforce this is OEM-specific OEMConfig (for example, Samsung Knox Service
-Plugin), which isn't portable across device manufacturers, so it isn't implemented here. QUIC/HTTP-3
-(UDP 443) is a related known gap: Global Secure Access web content filtering can't inspect QUIC, and
-both Chrome and Edge enable it by default, so filtered categories can still load over QUIC on Android
-where there's no OS-level firewall rule (unlike Windows' `New-NetFirewallRule` block) to force fallback
-to inspectable TCP.
+Plugin), which isn't portable across device manufacturers, so it isn't implemented here.
+
+### QUIC/HTTP-3 bypass mitigation
+
+Global Secure Access web content filtering can't inspect QUIC (UDP 443): matching traffic bypasses
+the filtering policy entirely instead of falling through to the policy's default action. Both Chrome
+and Edge enable QUIC by default, and Android has no OS-level firewall rule (unlike Windows'
+`New-NetFirewallRule` block) to force a fallback to inspectable TCP. The only two browsers permitted
+on the corporate-owned child devices are Chrome (preinstalled, not a Play Store deployment - see the
+`android-chrome` app entry note) and Edge, so `android-chrome-quic-child.json` and
+`android-edge-quic-child.json` push the Chromium `QuicAllowed: false` managed configuration to both,
+forcing them onto TCP/443 so Global Secure Access can evaluate the SNI against the filtering policy.
+Edge's support for this key isn't exhaustively documented by Microsoft (it's inherited from Chromium)
+- verify with a traffic log check after rollout.
 
 ## Scheduled device lock
 

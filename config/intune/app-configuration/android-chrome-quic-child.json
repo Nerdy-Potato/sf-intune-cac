@@ -1,0 +1,26 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Global Secure Access web content filtering can't inspect QUIC/HTTP-3 (UDP 443) - matching",
+    "traffic bypasses the web content filtering policy entirely rather than falling through to the",
+    "policy's default action. Chrome enables QUIC by default whenever a site advertises support for",
+    "it, which is common on CDNs fronting game sites. Setting QuicAllowed=false forces Chrome onto",
+    "TCP/443, which Global Secure Access can inspect via SNI and evaluate against the filtering policy.",
+    "Graph requires payloadJson to be base64-encoded JSON, not a raw JSON string (see",
+    "android-defender-gsa-child.json for the same requirement). The decoded value is:",
+    "{\"kind\":\"androidenterprise#managedConfiguration\",\"productId\":\"app:com.android.chrome\",\"managedProperty\":[{\"key\":\"QuicAllowed\",\"valueBool\":false}]}"
+  ],
+  "name": "android-chrome-quic-child",
+  "resource": "mobileAppConfigurations",
+  "targetApps": ["android-chrome"],
+  "assignments": [{ "group": "sg-tier-child", "intent": "include" }],
+  "payload": {
+    "@odata.type": "#microsoft.graph.androidManagedStoreAppConfiguration",
+    "displayName": "CaC - Android - Chrome QUIC Disabled (Child)",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "packageId": "com.android.chrome",
+    "profileApplicability": "androidDeviceOwner",
+    "payloadJson": "eyJraW5kIjoiYW5kcm9pZGVudGVycHJpc2UjbWFuYWdlZENvbmZpZ3VyYXRpb24iLCJwcm9kdWN0SWQiOiJhcHA6Y29tLmFuZHJvaWQuY2hyb21lIiwibWFuYWdlZFByb3BlcnR5IjpbeyJrZXkiOiJRdWljQWxsb3dlZCIsInZhbHVlQm9vbCI6ZmFsc2V9XX0=",
+    "permissionActions": []
+  }
+}

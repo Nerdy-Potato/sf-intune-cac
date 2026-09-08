@@ -184,6 +184,21 @@
       "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
     },
     {
+      "id": "android-chrome",
+      "platform": "android",
+      "source": "managedGooglePlay",
+      "payload": {
+        "@odata.type": "#microsoft.graph.androidManagedStoreApp",
+        "displayName": "Google Chrome",
+        "description": "Approved so the QuicAllowed managed configuration can be pushed. Chrome ships preinstalled as a system app on the corporate-owned child devices - this entry exists to attach app configuration, not to install it. Managed by sf-intune-cac.",
+        "publisher": "Google LLC",
+        "packageId": "com.android.chrome",
+        "appStoreUrl": "https://play.google.com/store/apps/details?id=com.android.chrome",
+        "minimumSupportedOperatingSystem": { "v8_0": true }
+      },
+      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+    },
+    {
       "id": "android-spotify-kids",
       "platform": "android",
       "source": "managedGooglePlay",
