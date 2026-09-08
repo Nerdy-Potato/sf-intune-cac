@@ -62,7 +62,7 @@ Describe 'Repository configuration' {
         $expectedAppIds = @(
             'android-defender', 'android-copilot', 'android-word', 'android-excel',
             'android-powerpoint', 'android-onenote', 'android-outlook', 'android-teams',
-            'android-onedrive', 'android-edge',
+            'android-onedrive', 'android-edge', 'android-chrome',
             'android-spotify-kids', 'android-moonlight', 'android-steam-link',
             'android-windows-app', 'android-xbox'
         )

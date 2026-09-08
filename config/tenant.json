@@ -93,6 +93,12 @@
         "identity": { "kind": "packageId", "value": "com.microsoft.emmx" }
       },
       {
+        "id": "android-chrome",
+        "displayName": "Google Chrome",
+        "odataType": "#microsoft.graph.androidManagedStoreApp",
+        "identity": { "kind": "packageId", "value": "com.android.chrome" }
+      },
+      {
         "id": "android-spotify-kids",
         "displayName": "Spotify Kids",
         "odataType": "#microsoft.graph.androidManagedStoreApp",
