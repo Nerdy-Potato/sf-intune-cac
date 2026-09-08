@@ -44,7 +44,12 @@ The plan reports either package as `Prerequisite` until it exists, and never pre
 ## MDE and Global Secure Access
 
 On Android, Defender is required and its managed-device app configuration sets `Global Secure Access`
-and `GlobalSecureAccessPrivateChannel` to `3`, which turns them on and prevents user disablement.
+and `GlobalSecureAccessPrivateChannel` to `3`, which turns them on and prevents user disablement. That
+app-config setting only stops the user from disabling GSA inside Defender; it doesn't force every
+other app's traffic through the tunnel. `android-fully-managed-restrictions-child.json` also sets
+`vpnAlwaysOnPackageIdentifier` to the Defender package (`com.microsoft.scmx`) with
+`vpnAlwaysOnLockdownMode: true`, so the device has no network connectivity at all unless the GSA
+tunnel is connected - closing the gap where another app could bypass Global Secure Access entirely.
 
 On iOS/iPadOS, Defender is required and the on-demand custom VPN profile uses the Defender bundle
 identifier, silently onboards, connects for all domains, disables split tunneling, and blocks user
@@ -53,6 +58,25 @@ override.
 On Windows, the GSA Win32 package is required. The tenant must also have the Internet Access traffic
 forwarding profile enabled and assigned to `CaC-Tier-Child`; traffic forwarding profiles are Entra
 Global Secure Access objects rather than Intune objects.
+
+The web content filtering policy, security profile, and the Conditional Access policy that links them
+to Global Secure Access are Entra objects, not Intune objects, and are configured manually - the same
+as the traffic forwarding profile above. This repository does not create or validate them.
+
+### Known limitation: Android Private DNS
+
+Android's system-wide Private DNS (DNS-over-TLS) setting isn't exposed by Intune for Android
+Enterprise device owner devices - not through `deviceConfigurations`
+(`androidDeviceOwnerGeneralDeviceConfiguration` has no such property) and not through the settings
+catalog. If a child device operator manually turns on Private DNS, it can bypass Global Secure
+Access's DNS-based visibility even with Always-on VPN lockdown enforced (lockdown blocks all
+non-tunneled traffic, but doesn't change what DNS resolution path the OS chooses inside the tunnel).
+The only documented way to enforce this is OEM-specific OEMConfig (for example, Samsung Knox Service
+Plugin), which isn't portable across device manufacturers, so it isn't implemented here. QUIC/HTTP-3
+(UDP 443) is a related known gap: Global Secure Access web content filtering can't inspect QUIC, and
+both Chrome and Edge enable it by default, so filtered categories can still load over QUIC on Android
+where there's no OS-level firewall rule (unlike Windows' `New-NetFirewallRule` block) to force fallback
+to inspectable TCP.
 
 ## Scheduled device lock
 

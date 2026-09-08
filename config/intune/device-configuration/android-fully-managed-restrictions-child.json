@@ -17,7 +17,12 @@
     "device restriction baseline and should target the dedicated child device group, not the user identity",
     "tier group. Also set bluetoothBlockConfiguration to false per owner request and explicitly set",
     "shareDeviceLocationDisabled to false so Intune admin Locate device capability remains allowed and the",
-    "config-as-code intent is documented rather than relying on the default."
+    "config-as-code intent is documented rather than relying on the default.",
+    "2026-09-08: added vpnAlwaysOnPackageIdentifier/vpnAlwaysOnLockdownMode targeting Defender's GSA client",
+    "(com.microsoft.scmx). The app-config values in android-defender-gsa-child.json (Global Secure Access = 3,",
+    "GlobalSecureAccessPrivateChannel = 3, left unchanged/retained here) only stop the user from disabling GSA",
+    "inside Defender - they don't force every app's traffic through the tunnel. Lockdown mode denies all",
+    "network connectivity if the VPN isn't connected, closing the gap where other apps could bypass the tunnel."
   ],
   "name": "android-fully-managed-restrictions-child",
   "resource": "deviceConfigurations",
@@ -51,6 +56,8 @@
     "storageBlockUsbFileTransfer": true,
     "systemUpdateInstallType": "automatic",
     "usersBlockAdd": true,
-    "usersBlockRemove": true
+    "usersBlockRemove": true,
+    "vpnAlwaysOnPackageIdentifier": "com.microsoft.scmx",
+    "vpnAlwaysOnLockdownMode": true
   }
 }
