@@ -145,8 +145,9 @@ than an hour with no other explanation), approve every package once:
    | Microsoft Teams | `com.microsoft.teams` |
    | Microsoft OneDrive | `com.microsoft.skydrive` |
    | Microsoft Edge | `com.microsoft.emmx` |
+   | Google Chrome | `com.android.chrome` |
 
-4. After approving all ten, trigger a sync (**Apps > Android > Managed Google Play > Sync**, or wait
+4. After approving all eleven, trigger a sync (**Apps > Android > Managed Google Play > Sync**, or wait
    for Intune's automatic sync). Google's own sync usually completes within minutes, not hours.
 5. Redeploy. `Get-CaCRemoteAppCandidates` matches remote apps by `packageId`, so if approval created
    a separate, properly-synced object, the next plan will pick that one up as the existing app going
