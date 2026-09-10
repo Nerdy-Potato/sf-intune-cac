@@ -21,6 +21,12 @@ not turn an arbitrary BYOD enrollment into a corporate device. Before a device i
 3. Register Windows hardware hashes with Autopilot and assign a user-driven Entra join profile that
    creates a standard user. Run `bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1` first; it
    makes the Intune Provisioning Client service principal the owner of the assigned child device group.
+   The same script also supports `-Tier adult` and `-Tier teen` (default remains `child` for backward
+   compatibility) to create/own the equivalent `CaC-Autopilot-DevicePreparation-Adult`/`-Teen` groups
+   for those tiers. As with the child tier, this repository only automates the group and service
+   principal ownership prerequisite - the Autopilot Device Preparation enrollment policy objects
+   themselves (one pointed at each of the three groups) must still be created manually in the Intune
+   portal.
 
 Enrollment tokens, Apple server tokens, and Windows hardware hashes are tenant/device secrets and
 are deliberately not stored in this public repository.

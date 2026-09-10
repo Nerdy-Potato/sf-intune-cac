@@ -18,7 +18,11 @@ param(
     [string] $ExpectedTenantDomain = 'nerdypotato.onmicrosoft.com',
 
     [Parameter()]
-    [string] $GroupDisplayName = 'CaC-Autopilot-DevicePreparation-Child',
+    [ValidateSet('adult', 'teen', 'child')]
+    [string] $Tier = 'child',
+
+    [Parameter()]
+    [string] $GroupDisplayName,
 
     [Parameter()]
     [switch] $Force
@@ -26,6 +30,29 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Keep in sync with config/identity/groups.json's sg-autopilot-device-preparation-* entries.
+$tierSettings = @{
+    adult = @{
+        GroupDisplayName = 'CaC-Autopilot-DevicePreparation-Adult'
+        MailNickname     = 'cac-autopilot-device-preparation-adult'
+        Description      = 'Assigned device group populated by Windows Autopilot device preparation for adult devices. Managed by sf-intune-cac.'
+    }
+    teen  = @{
+        GroupDisplayName = 'CaC-Autopilot-DevicePreparation-Teen'
+        MailNickname     = 'cac-autopilot-device-preparation-teen'
+        Description      = 'Assigned device group populated by Windows Autopilot device preparation for teen devices. Managed by sf-intune-cac.'
+    }
+    child = @{
+        GroupDisplayName = 'CaC-Autopilot-DevicePreparation-Child'
+        MailNickname     = 'cac-autopilot-device-preparation-child'
+        Description      = 'Assigned device group populated by Windows Autopilot device preparation for child devices. Managed by sf-intune-cac.'
+    }
+}
+$tierSetting = $tierSettings[$Tier]
+if (-not $PSBoundParameters.ContainsKey('GroupDisplayName')) {
+    $GroupDisplayName = $tierSetting.GroupDisplayName
+}
 
 $context = Get-MgContext
 if (-not $context) {
@@ -64,9 +91,9 @@ if (-not $group) {
     if (-not $PSCmdlet.ShouldProcess($GroupDisplayName, 'Create assigned security device group')) { return }
     $group = Invoke-MgGraphRequest -Method POST -Uri 'v1.0/groups' -Body @{
         displayName     = $GroupDisplayName
-        description     = 'Assigned device group populated by Windows Autopilot device preparation for child devices. Managed by sf-intune-cac.'
+        description     = $tierSetting.Description
         mailEnabled     = $false
-        mailNickname    = 'cac-autopilot-device-preparation-child'
+        mailNickname    = $tierSetting.MailNickname
         securityEnabled = $true
         groupTypes      = @()
     }

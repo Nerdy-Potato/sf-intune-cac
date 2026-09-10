@@ -83,6 +83,22 @@
       "membership": { "source": "explicit", "values": [] }
     },
     {
+      "id": "sg-autopilot-device-preparation-adult",
+      "displayName": "CaC-Autopilot-DevicePreparation-Adult",
+      "mailNickname": "cac-autopilot-device-preparation-adult",
+      "description": "Assigned device group populated by Windows Autopilot device preparation for adult devices.",
+      "purpose": "assignment",
+      "membership": { "source": "explicit", "values": [] }
+    },
+    {
+      "id": "sg-autopilot-device-preparation-teen",
+      "displayName": "CaC-Autopilot-DevicePreparation-Teen",
+      "mailNickname": "cac-autopilot-device-preparation-teen",
+      "description": "Assigned device group populated by Windows Autopilot device preparation for teen devices.",
+      "purpose": "assignment",
+      "membership": { "source": "explicit", "values": [] }
+    },
+    {
       "id": "sg-nuclear-family",
       "displayName": "NuclearFamily-SG",
       "mailNickname": "nuclear-family-sg",
