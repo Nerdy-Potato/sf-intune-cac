@@ -1,0 +1,37 @@
+name: Resolve local-admin policy targets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: resolve-local-admin-policy-targets
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve SF Adults Local Admin policy group targets and AAD SIDs
+    runs-on: ubuntu-latest
+    environment: plan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_PLAN_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Resolve local-admin policy targets
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+        run: ./scripts/bootstrap/Resolve-CaCLocalAdminPolicyTargets.ps1
