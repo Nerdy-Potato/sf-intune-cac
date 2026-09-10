@@ -70,19 +70,20 @@ function Get-CaCResourceMap {
             AssignAction       = 'assign'
             SupportsApps       = $false
             RemoteNameProperty = 'name'
-            # Confirmed live (2026-09-10): Microsoft Graph permanently rejects PATCH bodies that
-            # include the `settings` navigation property on an existing configurationPolicies
-            # object - "Cannot apply PATCH to navigation property 'settings' on entity type
-            # 'microsoft.management.services.api.deviceManagementConfigurationPolicy'." This is a
-            # platform limitation (not tenant/permission specific - same restriction reported
-            # across the community, e.g. microsoftgraph/powershell-intune-samples#286), distinct
-            # from deviceEnrollmentConfigurations' write-blocked-entirely restriction: creates
-            # (POST) with inline settings work fine, and PATCH of other scalar properties
-            # (name/description) also works - only `settings` cannot be updated in place via API.
-            # New-CaCPlan/Invoke-CaCPlan use this flag to omit `settings` from Update PATCH bodies
-            # and report settings drift as a manual portal step instead of attempting (and
-            # permanently failing) the call.
-            SettingsUpdateRequiresPortalApply = $true
+            # Confirmed live (2026-09-10): Microsoft Graph's PATCH for an existing configurationPolicies
+            # object accepts only Name and Description - "Invalid patch, attempting to patch property
+            # {Platforms|...} is not allowed. Valid properties are Name, Description, and Settings." -
+            # and even Settings itself is separately, unconditionally rejected on PATCH - "Cannot apply
+            # PATCH to navigation property 'settings' on entity type
+            # 'microsoft.management.services.api.deviceManagementConfigurationPolicy'." Together these
+            # mean there is no safe, general in-place Update via API for this resource kind: any drift
+            # beyond Name/Description (settings, platforms, technologies, etc.) cannot be reconciled by
+            # PATCH. This is a platform limitation, not tenant/permission specific (matches community
+            # reports, e.g. microsoftgraph/powershell-intune-samples#286). Creates (POST) with the full
+            # payload including settings work fine - only in-place updates are affected.
+            # New-CaCPlan/Invoke-CaCPlan use this flag to route every Update action for this resource
+            # kind to a manual portal step instead of attempting (and permanently failing) a PATCH.
+            UpdateRequiresPortalApply = $true
         }
     }
 
