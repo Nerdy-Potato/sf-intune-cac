@@ -1,0 +1,63 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "Companion Windows LAPS policy for creating/managing the custom local administrator account",
+    "'x3nc0n'. The adopted LAPS-Shell Settings Catalog policy sets AdministratorAccountName but",
+    "manual LAPS mode does not create custom accounts; Microsoft documents that Automatic Account",
+    "Management is required for Windows LAPS to create/manage a custom account automatically.",
+    "These are documented LAPS CSP OMA-URI nodes, avoiding unverified Settings Catalog definition IDs.",
+    "Automatic Account Management requires Windows 11 24H2 or later (or Windows Server 2025+).",
+    "Older Windows builds should ignore/skip these nodes and will still need the account created by",
+    "another supported mechanism before the LAPS-Shell password settings can manage it.",
+    "No password is stored in git; Windows LAPS creates/rotates and backs up the secret to Entra ID."
+  ],
+  "name": "laps-shell-automatic-account-management",
+  "resource": "deviceConfigurations",
+  "assignments": [
+    { "group": "sg-devices-adult", "intent": "include" },
+    { "group": "sg-devices-teen", "intent": "include" },
+    { "group": "sg-devices-child", "intent": "include" }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.windows10CustomConfiguration",
+    "displayName": "CaC - Windows LAPS - Shell Account Management",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal. Requires Windows 11 24H2+ for automatic local account creation.",
+    "omaSettings": [
+      {
+        "@odata.type": "#microsoft.graph.omaSettingBoolean",
+        "displayName": "Windows LAPS automatic account management enabled",
+        "description": "Enables Windows LAPS to create and manage the configured custom local administrator account.",
+        "omaUri": "./Device/Vendor/MSFT/LAPS/Policies/AutomaticAccountManagementEnabled",
+        "value": true
+      },
+      {
+        "@odata.type": "#microsoft.graph.omaSettingBoolean",
+        "displayName": "Windows LAPS automatic account enabled",
+        "description": "Keeps the automatically managed local administrator account enabled.",
+        "omaUri": "./Device/Vendor/MSFT/LAPS/Policies/AutomaticAccountManagementEnableAccount",
+        "value": true
+      },
+      {
+        "@odata.type": "#microsoft.graph.omaSettingString",
+        "displayName": "Windows LAPS automatic account name",
+        "description": "Fixed custom local administrator account name created and managed by Windows LAPS.",
+        "omaUri": "./Device/Vendor/MSFT/LAPS/Policies/AutomaticAccountManagementNameOrPrefix",
+        "value": "x3nc0n"
+      },
+      {
+        "@odata.type": "#microsoft.graph.omaSettingBoolean",
+        "displayName": "Windows LAPS randomize automatic account name",
+        "description": "Disabled so the managed account name remains x3nc0n.",
+        "omaUri": "./Device/Vendor/MSFT/LAPS/Policies/AutomaticAccountManagementRandomizeName",
+        "value": false
+      },
+      {
+        "@odata.type": "#microsoft.graph.omaSettingInteger",
+        "displayName": "Windows LAPS automatic account target",
+        "description": "1 means Windows LAPS creates/manages a new custom local administrator account rather than using the built-in Administrator account.",
+        "omaUri": "./Device/Vendor/MSFT/LAPS/Policies/AutomaticAccountManagementTarget",
+        "value": 1
+      }
+    ]
+  }
+}

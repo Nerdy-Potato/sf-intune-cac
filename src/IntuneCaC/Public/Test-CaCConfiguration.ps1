@@ -152,7 +152,7 @@ function Test-CaCConfiguration {
         }
 
         # Keep in sync with the guard list in src/IntuneCaC/Private/Get-CaCAdoption.ps1.
-        $allowedPolicyIds = @('local-admin-adult-all-device-tiers')
+        $allowedPolicyIds = @('local-admin-adult-all-device-tiers', 'laps-shell')
         $policiesById = @{}
         foreach ($policy in $Configuration.Policies) {
             if ($policy.ContainsKey('name')) { $policiesById[$policy.name] = $policy }
