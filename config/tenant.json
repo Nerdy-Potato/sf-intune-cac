@@ -10,7 +10,10 @@
     "2026-08-19: Microsoft renamed 'Microsoft 365 Copilot' to 'Microsoft Copilot' in place (packageId",
     "unchanged) as part of the consumer/work Copilot app merger. Renamed the adoption spec id to",
     "'android-copilot' and updated its displayName to match the live object, resolving a fail-closed",
-    "one-time adoption Skip caused by the display name no longer matching."
+    "one-time adoption Skip caused by the display name no longer matching.",
+    "2026-09-09: Added a one-time adoption entry for the manually-created 'SF Adults Local Admin'",
+    "Settings Catalog policy (local-admin-adult-all-device-tiers.json). Adoption matches on",
+    "displayName only (policies have no immutable package/bundle identity like apps do)."
   ],
   "adoption": {
     "oneTime": true,
@@ -127,6 +130,12 @@
         "displayName": "XBOX",
         "odataType": "#microsoft.graph.androidManagedStoreApp",
         "identity": { "kind": "packageId", "value": "com.microsoft.xboxone.smartglass" }
+      }
+    ],
+    "policies": [
+      {
+        "id": "local-admin-adult-all-device-tiers",
+        "displayName": "SF Adults Local Admin"
       }
     ]
   },

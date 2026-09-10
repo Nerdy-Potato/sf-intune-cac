@@ -3,7 +3,8 @@ function Test-CaCManagedObject {
     param(
         [Parameter(Mandatory)] $Object,
         [Parameter(Mandatory)] [string[]] $ManagedMarker,
-        [Parameter()] [string] $NamePrefix
+        [Parameter()] [string] $NamePrefix,
+        [Parameter()] [string] $NameProperty = 'displayName'
     )
 
     $description = Get-CaCProperty -InputObject $Object -Name 'description'
@@ -15,9 +16,9 @@ function Test-CaCManagedObject {
     }
 
     if ($PSBoundParameters.ContainsKey('NamePrefix')) {
-        $displayName = Get-CaCProperty -InputObject $Object -Name 'displayName'
-        if ([string]::IsNullOrWhiteSpace([string] $displayName) -or
-            $displayName -notlike "$NamePrefix*") {
+        $name = Get-CaCProperty -InputObject $Object -Name $NameProperty
+        if ([string]::IsNullOrWhiteSpace([string] $name) -or
+            $name -notlike "$NamePrefix*") {
             return $false
         }
     }

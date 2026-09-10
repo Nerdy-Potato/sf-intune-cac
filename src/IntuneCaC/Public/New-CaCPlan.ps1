@@ -266,13 +266,18 @@ function New-CaCPlan {
         # into a real $false so Add-Action's -RequiresPortalApply parameter always gets a boolean.
         $requiresPortalApply = [bool] (Get-CaCProperty -InputObject $endpoint -Name 'RequiresPortalApply')
 
+        $remoteNameProperty = Get-CaCProperty -InputObject $endpoint -Name 'RemoteNameProperty'
+        if (-not $remoteNameProperty) { $remoteNameProperty = 'displayName' }
+
         foreach ($policy in $resourceGroup.Group) {
             if (-not $policy.enabled) {
                 Add-Action -Kind 'Policy' -Action 'Skip' -Target $policy.payload.displayName -Details @('disabled in configuration')
                 continue
             }
 
-            $remote = $remoteObjects | Where-Object { $_.displayName -eq $policy.payload.displayName } | Select-Object -First 1
+            $remote = $remoteObjects | Where-Object { (Get-CaCProperty -InputObject $_ -Name $remoteNameProperty) -eq $policy.payload.displayName } | Select-Object -First 1
+            $adoptionSpec = Get-CaCAdoptionSpec -Configuration $Configuration -Kind Policy -Id $policy.name
+            $adopted = $false
 
             if (-not $remote) {
                 Add-Action -Kind 'Policy' -Action 'Create' -Target $policy.payload.displayName -Data $policy -Details @("resource: $resource") `
@@ -283,7 +288,37 @@ function New-CaCPlan {
                 continue
             }
 
-            if (-not (Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix)) {
+            # Adopted policies, like adopted groups, are allowed to keep a foreign (non-namePrefix)
+            # displayName forever - once the managed marker is present they are "already managed"
+            # on marker alone. Requiring NamePrefix here too would make adoption never settle into
+            # NoChange on subsequent runs, since "SF Adults Local Admin" never starts with "CaC".
+            $alreadyManaged = if ($adoptionSpec) {
+                Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NameProperty $remoteNameProperty
+            }
+            else {
+                Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NamePrefix $prefix -NameProperty $remoteNameProperty
+            }
+
+            if ($adoptionSpec -and -not $alreadyManaged) {
+                if (Test-CaCAdoptionPolicyIdentity -Object $remote -Spec $adoptionSpec) {
+                    $adopted = $true
+                    Add-Action -Kind 'Policy' -Action 'Adopt' -Target $policy.payload.displayName -Data ([pscustomobject]@{
+                            Policy              = $policy
+                            Id                  = $remote.id
+                            ExistingDescription = Get-CaCProperty -InputObject $remote -Name 'description'
+                        }) -ObjectId $remote.id -Details @(
+                        'one-time adoption matched the exact configured display name',
+                        'establish the repository managed marker without changing the existing settings/assignment'
+                    ) -RequiresPortalApply $requiresPortalApply
+                }
+                else {
+                    Add-Action -Kind 'Policy' -Action 'Skip' -Target $policy.payload.displayName -Data $policy -Details @(
+                        'one-time adoption is fail-closed: the configured display name did not match the live object'
+                    )
+                    continue
+                }
+            }
+            elseif (-not $alreadyManaged) {
                 Add-Action -Kind 'Policy' -Action 'Skip' -Target $policy.payload.displayName -Data $policy -Details @(
                     'an unmanaged policy already uses this display name; refusing to take it over'
                 )
@@ -302,7 +337,10 @@ function New-CaCPlan {
                 @("target app dependency: $targetResolutionError")
             }
             else {
-                Get-CaCPayloadDrift -Desired $desiredPayload -Actual $remote
+                @(Get-CaCPayloadDrift -Desired $desiredPayload -Actual $remote)
+            }
+            if ($adopted) {
+                $drift = @($drift | Where-Object { $_ -notlike 'description:*' })
             }
 
             if ($drift) {
@@ -311,7 +349,7 @@ function New-CaCPlan {
                         Id     = $remote.id
                     }) -RequiresPortalApply $requiresPortalApply
             }
-            else {
+            elseif (-not $adopted) {
                 Add-Action -Kind 'Policy' -Action 'NoChange' -Target $policy.payload.displayName -Data ([pscustomobject]@{
                         Policy = $policy
                         Id     = $remote.id
@@ -329,11 +367,12 @@ function New-CaCPlan {
 
         $desiredNames = @($resourceGroup.Group | Where-Object { $_.enabled } | ForEach-Object { $_.payload.displayName })
         foreach ($remote in $remoteObjects) {
-            if ($remote.displayName -in $desiredNames) { continue }
-            if ($remote.displayName -notlike "$prefix - *") { continue }
+            $remoteName = Get-CaCProperty -InputObject $remote -Name $remoteNameProperty
+            if ($remoteName -in $desiredNames) { continue }
+            if ($remoteName -notlike "$prefix - *") { continue }
             if ((Get-CaCProperty -InputObject $remote -Name 'description') -notlike "*$marker*") { continue }
 
-            Add-Action -Kind 'Policy' -Action 'Delete' -Target $remote.displayName -Details @(
+            Add-Action -Kind 'Policy' -Action 'Delete' -Target $remoteName -Details @(
                 'exists in the tenant, is marked as managed by this repository, and is no longer defined in config'
             ) -Data ([pscustomobject]@{
                     Id       = $remote.id

@@ -348,6 +348,46 @@ function Invoke-CaCPlan {
     $policyIds = @{}
     $appIds = @{}
 
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'Adopt' })) {
+        $adoptPolicyAction = $action
+        $policy = $adoptPolicyAction.Data.Policy
+        if ($policy -and ($blockedPolicyNames.ContainsKey($policy.payload.displayName) -or
+                $failedPolicyNames.ContainsKey($policy.payload.displayName))) {
+            Add-Result -Action 'Adopt policy' -Target $action.Target -Status 'Failed' `
+                -Message 'the policy was skipped or failed in the reviewed plan'
+            continue
+        }
+
+        if (-not $PSCmdlet.ShouldProcess($action.Target, 'Adopt policy')) { continue }
+
+        $operation = Invoke-CaCAction -Action 'Adopt policy' -Target $action.Target -Operation {
+            $existingDescription = [string] $adoptPolicyAction.Data.ExistingDescription
+            $description = if ($existingDescription -like "*$($Configuration.Tenant.managedMarker)*") {
+                $existingDescription
+            }
+            elseif ([string]::IsNullOrWhiteSpace($existingDescription)) {
+                '{0} {1}' -f $policy.payload.description, $Configuration.Tenant.managedMarker
+            }
+            else {
+                '{0} {1}' -f $existingDescription.Trim(), $Configuration.Tenant.managedMarker
+            }
+
+            $adoptEndpoint = Get-CaCResourceMap -Resource $policy.resource
+            & $GraphInvoker 'PATCH' "$($adoptEndpoint.Path)/$($adoptPolicyAction.ObjectId)" @{ description = $description } | Out-Null
+            $adoptPolicyAction.ObjectId
+        }
+        if (-not $operation.Succeeded) {
+            if ($policy -and $policy.payload.displayName) {
+                $failedPolicyNames[$policy.payload.displayName] = $true
+            }
+            continue
+        }
+
+        $policyIds[$policy.payload.displayName] = $operation.Value
+        Add-Result -Action 'Adopt policy' -Target $action.Target -Status 'Applied' `
+            -Message 'managed marker established; existing settings/assignment preserved'
+    }
+
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'App' -and $_.Action -in @('NoChange', 'Adopt') })) {
         if ($action.Data -and $action.Data.App -and $action.Data.App.id -and $action.Data.Id -and
             -not $blockedAppIds.ContainsKey($action.Data.App.id)) {

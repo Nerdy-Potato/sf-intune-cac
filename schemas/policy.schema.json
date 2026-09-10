@@ -18,6 +18,7 @@
         "iosManagedAppProtections",
         "androidManagedAppProtections"
         ,"mobileAppConfigurations"
+        ,"deviceManagementConfigurationPolicies"
       ]
     },
     "enabled": { "type": "boolean" },

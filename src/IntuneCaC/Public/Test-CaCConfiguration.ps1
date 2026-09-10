@@ -150,6 +150,39 @@ function Test-CaCConfiguration {
                     'Adoption requires an identity (packageId or bundleId) matching this app''s own catalog entry.'
             }
         }
+
+        # Keep in sync with the guard list in src/IntuneCaC/Private/Get-CaCAdoption.ps1.
+        $allowedPolicyIds = @('local-admin-adult-all-device-tiers')
+        $policiesById = @{}
+        foreach ($policy in $Configuration.Policies) {
+            if ($policy.ContainsKey('name')) { $policiesById[$policy.name] = $policy }
+        }
+        foreach ($spec in @(Get-CaCProperty -InputObject $adoption -Name 'policies' | Where-Object { $_ })) {
+            $specId = Get-CaCProperty -InputObject $spec -Name 'id'
+            if ($specId -notin $allowedPolicyIds) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/policy-scope' -Target ([string] $specId) -Message `
+                    ("Only the configured one-time adoption policies may be adopted: {0}." -f ($allowedPolicyIds -join ', '))
+                continue
+            }
+
+            $policy = if ($policiesById.ContainsKey($specId)) { $policiesById[$specId] } else { $null }
+            if (-not $policy) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/policy-config' -Target $specId -Message `
+                    'The configured adoption policy must exist in config/intune/**/*.json.'
+                continue
+            }
+
+            $specDisplayName = Get-CaCProperty -InputObject $spec -Name 'displayName'
+            # Intentionally require the spec's displayName to equal the policy's own configured
+            # payload.displayName (unlike apps, which allow a foreign live displayName): the whole
+            # point of this adoption is that the config's own displayName is written to exactly
+            # match the pre-existing live object's real display name, since matching (both here
+            # and in New-CaCPlan) is by displayName.
+            if (-not $specDisplayName -or $specDisplayName -ne $policy.payload.displayName) {
+                Add-Finding -Severity 'Error' -Rule 'adoption/policy-identity' -Target $specId -Message `
+                    'Adoption requires the spec displayName to match this policy''s own configured payload.displayName.'
+            }
+        }
     }
 
     $duplicateAppIds = $Configuration.Apps | Group-Object -Property { $_.id } | Where-Object Count -GT 1
@@ -201,6 +234,12 @@ function Test-CaCConfiguration {
             'More than one policy definition uses this displayName. displayName is the identity key used to match objects in the tenant.'
     }
 
+    # Adopted policies keep their pre-existing live displayName forever (see the adoption/policy-*
+    # rules above), which is intentionally allowed to violate the namePrefix convention, so the
+    # name-prefix check below must not flag them.
+    $adoptedPolicyIds = @(Get-CaCProperty -InputObject (Get-CaCProperty -InputObject $tenant -Name 'adoption') -Name 'policies' |
+            Where-Object { $_ } | ForEach-Object { Get-CaCProperty -InputObject $_ -Name 'id' })
+
     foreach ($policy in $Configuration.Policies) {
         $target = $policy.name
 
@@ -225,7 +264,7 @@ function Test-CaCConfiguration {
             ("description must contain the managed marker '{0}' so that the tenant makes it obvious the object is owned by this repository." -f $tenant.managedMarker)
         }
 
-        if ($policy.payload.displayName -notlike "$($tenant.namePrefix) - *") {
+        if ($policy.payload.displayName -notlike "$($tenant.namePrefix) - *" -and $policy.name -notin $adoptedPolicyIds) {
             Add-Finding -Severity 'Error' -Rule 'policy/name-prefix' -Target $target -Message `
             ("displayName must start with '{0} - '. The planner only ever touches objects in that namespace, so an unprefixed policy would be orphaned on the next run." -f $tenant.namePrefix)
         }
