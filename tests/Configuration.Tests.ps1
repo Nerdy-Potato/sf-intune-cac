@@ -122,7 +122,7 @@ Describe 'Repository configuration' {
         # See config/tenant.json's adoption.policies entry and Test-CaCConfiguration's
         # adoption/policy-* + policy/name-prefix rules.
         $adoptedPolicyIds = @($script:Config.Tenant.adoption.policies | ForEach-Object { $_.id })
-        $adoptedPolicyIds | Should -Contain 'laps-shell'
+        $adoptedPolicyIds | Should -Contain 'local-admin-adult-all-device-tiers'
         foreach ($policy in $script:Config.Policies) {
             $policy.payload.description | Should -BeLike "*$($script:Config.Tenant.managedMarker)*"
             if ($policy.name -notin $adoptedPolicyIds) {

@@ -20,7 +20,7 @@
   ],
   "payload": {
     "@odata.type": "#microsoft.graph.windows10CustomConfiguration",
-    "displayName": "CaC - Windows LAPS - Shell Account Management",
+    "displayName": "CaC - Windows LAPS - Account Management",
     "description": "Managed by sf-intune-cac. Do not edit in the portal. Requires Windows 11 24H2+ for automatic local account creation.",
     "omaSettings": [
       {

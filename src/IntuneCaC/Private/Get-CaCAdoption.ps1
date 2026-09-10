@@ -24,8 +24,7 @@ function Get-CaCAdoptionSpec {
         'android-windows-app', 'android-xbox'
     )
     $adoptablePolicyIds = @(
-        'local-admin-adult-all-device-tiers',
-        'laps-shell'
+        'local-admin-adult-all-device-tiers'
     )
     if (($Kind -eq 'Group' -and $Id -notin $adoptableGroupIds) -or
         ($Kind -eq 'App' -and $Id -notin $adoptableAppIds) -or
