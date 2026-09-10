@@ -82,18 +82,23 @@ function Test-CaCAdoptionPolicyIdentity {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] $Object,
-        [Parameter(Mandatory)] $Spec
+        [Parameter(Mandatory)] $Spec,
+        # Some policy resource kinds (e.g. deviceManagementConfigurationPolicies / Settings
+        # Catalog) expose their identity as `name` on the live Graph object rather than
+        # `displayName` - see Get-CaCResourceMap's RemoteNameProperty. Defaults to
+        # 'displayName' to preserve prior behavior for resource kinds that do use it.
+        [string] $NameProperty = 'displayName'
     )
 
     # Policies (unlike apps) have no immutable package/bundle identity to match on - the live
-    # object is a hand-created Settings Catalog policy with only a displayName and @odata.type
-    # to go on. Fully data-driven against the configured adoption spec (config/tenant.json's
+    # object is a hand-created policy with only a name/displayName and @odata.type to go on.
+    # Fully data-driven against the configured adoption spec (config/tenant.json's
     # adoption.policies entries) - no per-policy hardcoding here.
     $specDisplayName = Get-CaCProperty -InputObject $Spec -Name 'displayName'
     if (-not $specDisplayName) { return $false }
 
     return (
-        (Get-CaCProperty -InputObject $Object -Name 'displayName') -eq $specDisplayName
+        (Get-CaCProperty -InputObject $Object -Name $NameProperty) -eq $specDisplayName
     )
 }
 
