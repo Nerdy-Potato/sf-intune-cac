@@ -333,11 +333,20 @@ function New-CaCPlan {
                 $targetResolutionError = $_.Exception.Message
                 $policy.payload
             }
+            $actualForDrift = $remote
+            if (-not $targetResolutionError -and
+                $resource -eq 'deviceManagementConfigurationPolicies' -and
+                (Test-CaCHasProperty -InputObject $desiredPayload -Name 'settings')) {
+                $settingsResponse = & $GraphInvoker 'GET' "$($endpoint.Path)/$($remote.id)/settings" $null
+                $actualForDrift = $remote | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable
+                $actualForDrift['settings'] = @($settingsResponse.value | Where-Object { $_ })
+            }
+
             $drift = if ($targetResolutionError) {
                 @("target app dependency: $targetResolutionError")
             }
             else {
-                @(Get-CaCPayloadDrift -Desired $desiredPayload -Actual $remote)
+                @(Get-CaCPayloadDrift -Desired $desiredPayload -Actual $actualForDrift)
             }
             if ($adopted) {
                 $drift = @($drift | Where-Object { $_ -notlike 'description:*' })

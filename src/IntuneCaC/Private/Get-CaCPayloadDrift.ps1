@@ -22,6 +22,50 @@ function Get-CaCPayloadDrift {
 
     $drift = [System.Collections.Generic.List[string]]::new()
 
+    function ConvertTo-CaCSettingsComparable {
+        param($Value)
+
+        if ($null -eq $Value) { return $null }
+
+        $metadataKeys = @(
+            'auditRuleInformation',
+            'settingInstanceTemplateReference',
+            'settingValueTemplateReference'
+        )
+
+        if ($Value -is [System.Collections.IDictionary]) {
+            $ordered = [ordered]@{}
+            foreach ($key in @($Value.Keys | Sort-Object)) {
+                if ($key -eq 'id') { continue }
+
+                $childValue = $Value[$key]
+                if ($key -in $metadataKeys -and $null -eq $childValue) { continue }
+
+                $ordered[$key] = ConvertTo-CaCSettingsComparable -Value $childValue
+            }
+            return $ordered
+        }
+
+        if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+            return , @($Value | ForEach-Object { ConvertTo-CaCSettingsComparable -Value $_ })
+        }
+
+        if ($Value -is [pscustomobject]) {
+            $ordered = [ordered]@{}
+            foreach ($property in @($Value.PSObject.Properties.Name | Sort-Object)) {
+                if ($property -eq 'id') { continue }
+
+                $childValue = $Value.$property
+                if ($property -in $metadataKeys -and $null -eq $childValue) { continue }
+
+                $ordered[$property] = ConvertTo-CaCSettingsComparable -Value $childValue
+            }
+            return $ordered
+        }
+
+        return $Value
+    }
+
     foreach ($name in @($Desired.Keys)) {
         if ($name -in @('@odata.type', 'displayName')) { continue }
 
@@ -29,8 +73,8 @@ function Get-CaCPayloadDrift {
 
         if ($name -eq 'settings' -and $desiredValue -is [System.Collections.IEnumerable] -and $desiredValue -isnot [string]) {
             $actualValue = Get-CaCProperty -InputObject $Actual -Name $name
-            $desiredJson = (@($desiredValue) | ConvertTo-Json -Depth 50 -Compress)
-            $actualJson = (@($actualValue) | ConvertTo-Json -Depth 50 -Compress)
+            $desiredJson = (ConvertTo-CaCSettingsComparable -Value @($desiredValue) | ConvertTo-Json -Depth 50 -Compress)
+            $actualJson = (ConvertTo-CaCSettingsComparable -Value @($actualValue) | ConvertTo-Json -Depth 50 -Compress)
             if ($desiredJson -ne $actualJson) {
                 $drift.Add("settings: <settings tree differs>")
             }

@@ -151,6 +151,10 @@ BeforeAll {
                 '^deviceAppManagement/mobileApps/(?<id>[^/]+)/assignments$' {
                     return [pscustomobject]@{ value = @($State.AppAssignments[$Matches.id]) }
                 }
+                '^deviceManagement/configurationPolicies/(?<id>[^/]+)/settings$' {
+                    $policy = @($State.Policies['configurationPolicies'] | Where-Object id -EQ $Matches.id | Select-Object -First 1)
+                    return [pscustomobject]@{ value = @($policy.settings) }
+                }
                 '/assignments$' {
                     $policyId = ($Uri -split '/')[-2]
                     return [pscustomobject]@{ value = @($State.Assignments[$policyId]) }
@@ -184,6 +188,50 @@ Describe 'Get-CaCResourceMap' {
                 ($map[$kind].ContainsKey('RequiresPortalApply') -and $map[$kind].RequiresPortalApply) |
                     Should -Not -BeTrue -Because "resource kind '$kind' must not require a manual portal apply"
             }
+        }
+    }
+}
+
+Describe 'Get-CaCPayloadDrift' {
+    It 'ignores server-generated Settings Catalog metadata when comparing settings trees' {
+        InModuleScope IntuneCaC {
+            $desired = @{
+                name = 'LAPS-Shell'
+                settings = @(
+                    @{
+                        settingInstance = @{
+                            '@odata.type' = '#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance'
+                            settingDefinitionId = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled'
+                            choiceSettingValue = @{
+                                value = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled_1'
+                                children = @()
+                            }
+                        }
+                    }
+                )
+            }
+
+            $actual = [pscustomobject]@{
+                name = 'LAPS-Shell'
+                settings = @(
+                    [pscustomobject]@{
+                        id = '0'
+                        settingInstance = [pscustomobject]@{
+                            '@odata.type' = '#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance'
+                            settingDefinitionId = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled'
+                            settingInstanceTemplateReference = $null
+                            auditRuleInformation = $null
+                            choiceSettingValue = [pscustomobject]@{
+                                settingValueTemplateReference = $null
+                                value = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled_1'
+                                children = @()
+                            }
+                        }
+                    }
+                )
+            }
+
+            Get-CaCPayloadDrift -Desired $desired -Actual $actual | Should -BeNullOrEmpty
         }
     }
 }

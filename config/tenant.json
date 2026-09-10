@@ -13,7 +13,10 @@
     "one-time adoption Skip caused by the display name no longer matching.",
     "2026-09-09: Added a one-time adoption entry for the manually-created 'SF Adults Local Admin'",
     "Settings Catalog policy (local-admin-adult-all-device-tiers.json). Adoption matches on",
-    "displayName only (policies have no immutable package/bundle identity like apps do)."
+    "displayName only (policies have no immutable package/bundle identity like apps do).",
+    "2026-09-10: Added one-time adoption for the manually-created 'LAPS-Shell' Settings Catalog",
+    "policy and paired it with a documented Windows LAPS Automatic Account Management OMA-URI",
+    "policy so supported devices create/manage the x3nc0n local admin account."
   ],
   "adoption": {
     "oneTime": true,
@@ -136,6 +139,10 @@
       {
         "id": "local-admin-adult-all-device-tiers",
         "displayName": "SF Adults Local Admin"
+      },
+      {
+        "id": "laps-shell",
+        "displayName": "LAPS-Shell"
       }
     ]
   },

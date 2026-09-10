@@ -69,6 +69,25 @@ The web content filtering policy, security profile, and the Conditional Access p
 to Global Secure Access are Entra objects, not Intune objects, and are configured manually - the same
 as the traffic forwarding profile above. This repository does not create or validate them.
 
+## Windows local admin and LAPS
+
+Adult and teen productivity accounts do not need Entra ID or other cloud administrator roles to be
+local administrators on enrolled Windows devices. Local administrator membership is assigned by the
+device-scoped local users and groups Settings Catalog policies:
+
+- Adults: `CaC-Tier-Adult` is added to Administrators on adult, teen, and child device groups.
+- Teens: `CaC-Tier-Teen` is added to Administrators on teen and child device groups.
+- Children: no child tier group is added to local Administrators.
+
+`LAPS-Shell` configures Windows LAPS to rotate the password for the local administrator account named
+`x3nc0n`, but that setting alone does not create a custom local account in default/manual LAPS mode.
+The companion `CaC - Windows LAPS - Shell Account Management` custom device configuration enables
+Windows LAPS Automatic Account Management using documented LAPS CSP OMA-URI nodes so supported
+devices create and manage the `x3nc0n` custom local administrator account automatically. Automatic
+Account Management requires Windows 11 24H2 or later (or Windows Server 2025+); older Windows builds
+still need the account created by another supported mechanism before LAPS can manage its password.
+No local administrator password is stored in this repository.
+
 ### Known limitation: Android Private DNS
 
 Android's system-wide Private DNS (DNS-over-TLS) setting isn't exposed by Intune for Android
