@@ -640,6 +640,23 @@ function Invoke-CaCPlan {
             continue
         }
 
+        # Some policy resource kinds cannot be reconciled in place via API at all (see
+        # Get-CaCResourceMap's UpdateRequiresPortalApply) - Graph's PATCH for configurationPolicies
+        # only accepts Name/Description and unconditionally rejects Settings, so any other drift
+        # (settings, platforms, technologies, ...) can never be safely auto-applied by an Update.
+        # Creates (POST with the full payload) are unaffected and still handled normally below.
+        if ($action.Action -eq 'Update' -and [bool] (Get-CaCProperty -InputObject $endpoint -Name 'UpdateRequiresPortalApply')) {
+            $existingId = Get-CaCProperty -InputObject $actionData -Name 'Id'
+            Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'ManualActionRequired' -Message (
+                "Microsoft Graph does not support updating this policy's settings in place (PATCH only accepts " +
+                "Name/Description, and rejects Settings entirely). Detected drift: $($action.Details -join '; '). " +
+                "Update it manually in the Intune admin center: Devices > Manage devices > Configuration > " +
+                "$($policy.payload.displayName) (id: $existingId), or delete it there and let this repository " +
+                "recreate it on the next apply."
+            )
+            continue
+        }
+
         if (-not $PSCmdlet.ShouldProcess($action.Target, "$($action.Action) policy")) { continue }
         try {
             $payload = Get-CaCPolicyPayload -Policy $policy -AppObjectIds $appIds
@@ -650,18 +667,6 @@ function Invoke-CaCPlan {
             }
             Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'Failed' -Message $_.Exception.Message
             continue
-        }
-
-        # Graph permanently rejects PATCH bodies that include `settings` for some policy resource
-        # kinds (see Get-CaCResourceMap's SettingsUpdateRequiresPortalApply) - creates are
-        # unaffected, only in-place updates. Strip it from the outbound Update body and, if that
-        # was the only drift detected, report the whole action as a manual portal step instead of
-        # silently no-op'ing or throwing a Graph 400.
-        $settingsUpdateBlocked = $false
-        if ($action.Action -eq 'Update' -and [bool] (Get-CaCProperty -InputObject $endpoint -Name 'SettingsUpdateRequiresPortalApply') -and
-            (Test-CaCHasProperty -InputObject $payload -Name 'settings')) {
-            $settingsUpdateBlocked = $true
-            $payload.Remove('settings')
         }
 
         $policyAction = $action.Action
@@ -692,17 +697,6 @@ function Invoke-CaCPlan {
                 $failedPolicyNames[$policy.payload.displayName] = $true
                 continue
             }
-        }
-
-        if ($settingsUpdateBlocked) {
-            Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'ManualActionRequired' -Message (
-                "Other properties applied via API, but the settings tree differs from the tenant and Microsoft Graph does " +
-                "not support updating a configurationPolicies policy's settings in place (PATCH is rejected for the " +
-                "'settings' navigation property). Update the settings manually in the Intune admin center: Devices > " +
-                "Manage devices > Configuration > $($policy.payload.displayName), or delete and let this repository " +
-                "recreate the policy on the next apply."
-            )
-            continue
         }
 
         Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'Applied' -Message ($action.Details -join '; ')
