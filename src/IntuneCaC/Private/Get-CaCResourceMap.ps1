@@ -53,6 +53,24 @@ function Get-CaCResourceMap {
             SupportsApps       = $false
             SupportsTargetApps = $true
         }
+        deviceManagementConfigurationPolicies = @{
+            # Settings Catalog policies. Confirmed no analogous RequiresPortalApply write
+            # restriction exists for this resource type (unlike deviceEnrollmentConfigurations) -
+            # per Morpheus's design note, flagged for live confirmation but not blocking.
+            #
+            # IMPORTANT: unlike every other resource kind in this map, the live Graph object has
+            # no `displayName` property - its identity/name property is called `name` (see
+            # deviceManagementConfigurationPolicy resource type docs). RemoteNameProperty tells
+            # the generic policy plan/apply/drift code in New-CaCPlan.ps1/Invoke-CaCPlan.ps1 which
+            # remote property to match config's payload.displayName against, and
+            # Get-CaCPolicyPayload.ps1 uses it to rename `displayName` -> `name` (and drop the
+            # config-only `@odata.type` marker, which this non-polymorphic resource does not use)
+            # in the outbound Graph create/update body.
+            Path               = 'deviceManagement/configurationPolicies'
+            AssignAction       = 'assign'
+            SupportsApps       = $false
+            RemoteNameProperty = 'name'
+        }
     }
 
     if ($PSBoundParameters.ContainsKey('Resource')) {

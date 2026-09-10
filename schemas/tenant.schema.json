@@ -57,6 +57,18 @@
               }
             }
           }
+        },
+        "policies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "displayName"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "displayName": { "type": "string", "minLength": 1 }
+            }
+          }
         }
       }
     },

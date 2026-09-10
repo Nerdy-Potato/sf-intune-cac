@@ -2,7 +2,7 @@ function Get-CaCAdoptionSpec {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] $Configuration,
-        [Parameter(Mandatory)] [ValidateSet('Group', 'App')] [string] $Kind,
+        [Parameter(Mandatory)] [ValidateSet('Group', 'App', 'Policy')] [string] $Kind,
         [Parameter(Mandatory)] [string] $Id
     )
 
@@ -23,12 +23,20 @@ function Get-CaCAdoptionSpec {
         'android-spotify-kids', 'android-moonlight', 'android-steam-link',
         'android-windows-app', 'android-xbox'
     )
+    $adoptablePolicyIds = @(
+        'local-admin-adult-all-device-tiers'
+    )
     if (($Kind -eq 'Group' -and $Id -notin $adoptableGroupIds) -or
-        ($Kind -eq 'App' -and $Id -notin $adoptableAppIds)) {
+        ($Kind -eq 'App' -and $Id -notin $adoptableAppIds) -or
+        ($Kind -eq 'Policy' -and $Id -notin $adoptablePolicyIds)) {
         return $null
     }
 
-    $property = if ($Kind -eq 'Group') { 'groups' } else { 'apps' }
+    $property = switch ($Kind) {
+        'Group' { 'groups' }
+        'App' { 'apps' }
+        'Policy' { 'policies' }
+    }
     return @(
         Get-CaCProperty -InputObject $adoption -Name $property |
             Where-Object { (Get-CaCProperty -InputObject $_ -Name 'id') -eq $Id } |
@@ -67,6 +75,25 @@ function Test-CaCAdoptionGroupShape {
         [bool](Get-CaCProperty -InputObject $Object -Name 'mailEnabled') -eq
             [bool](Get-CaCProperty -InputObject $Spec -Name 'mailEnabled') -and
         (($actualTypes | Sort-Object) -join '|') -eq (($expectedTypes | Sort-Object) -join '|')
+    )
+}
+
+function Test-CaCAdoptionPolicyIdentity {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $Object,
+        [Parameter(Mandatory)] $Spec
+    )
+
+    # Policies (unlike apps) have no immutable package/bundle identity to match on - the live
+    # object is a hand-created Settings Catalog policy with only a displayName and @odata.type
+    # to go on. Fully data-driven against the configured adoption spec (config/tenant.json's
+    # adoption.policies entries) - no per-policy hardcoding here.
+    $specDisplayName = Get-CaCProperty -InputObject $Spec -Name 'displayName'
+    if (-not $specDisplayName) { return $false }
+
+    return (
+        (Get-CaCProperty -InputObject $Object -Name 'displayName') -eq $specDisplayName
     )
 }
 

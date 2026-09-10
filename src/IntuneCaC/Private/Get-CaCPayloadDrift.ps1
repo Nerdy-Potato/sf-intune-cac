@@ -7,6 +7,12 @@ function Get-CaCPayloadDrift {
         Only scalar values and arrays of primitives are compared. Nested objects (for example the
         scheduled action tree on a compliance policy) carry server generated ids that would produce
         permanent false drift, so they are re-sent on every write instead of being diffed.
+
+        Exception: the Settings Catalog `settings` array (deviceManagementConfigurationPolicies) is
+        compared as a single opaque, normalized-JSON blob rather than being skipped like other
+        arrays-of-objects. Per design (.squad/decisions/inbox/morpheus-local-admin-settings-catalog-
+        design.md) this is a deliberate v1 minimal-risk choice: whole-payload diffing, not per-setting
+        deep diff. Without this, changes to `settings` would never be detected as drift.
     #>
     [CmdletBinding()]
     param(
@@ -20,6 +26,16 @@ function Get-CaCPayloadDrift {
         if ($name -in @('@odata.type', 'displayName')) { continue }
 
         $desiredValue = $Desired[$name]
+
+        if ($name -eq 'settings' -and $desiredValue -is [System.Collections.IEnumerable] -and $desiredValue -isnot [string]) {
+            $actualValue = Get-CaCProperty -InputObject $Actual -Name $name
+            $desiredJson = (@($desiredValue) | ConvertTo-Json -Depth 50 -Compress)
+            $actualJson = (@($actualValue) | ConvertTo-Json -Depth 50 -Compress)
+            if ($desiredJson -ne $actualJson) {
+                $drift.Add("settings: <settings tree differs>")
+            }
+            continue
+        }
 
         if ($desiredValue -is [System.Collections.IDictionary]) { continue }
         if ($desiredValue -is [System.Collections.IEnumerable] -and $desiredValue -isnot [string]) {
