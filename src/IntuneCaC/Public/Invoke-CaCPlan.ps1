@@ -513,7 +513,21 @@ function Invoke-CaCPlan {
                 # too rather than blocking assignment.
                 $isTolerableAndroidStoreAppRestriction = $app.payload.'@odata.type' -eq '#microsoft.graph.androidManagedStoreApp' -and
                     $_.Exception.Message -like '*400 (Bad Request)*'
-                if (-not $isTolerableAndroidStoreAppRestriction) {
+
+                # Confirmed live (2026-09-10): a store app (iOS/Android) whose Intune-side
+                # metadata sync from the App Store/Play Store hasn't finished yet rejects ANY
+                # PATCH with 400 "app's PublishingState is not 'Published'." This is a transient,
+                # Microsoft-managed state (see mobileAppPublishingState docs - not settable via
+                # API) that normally clears on its own within minutes to hours of the app being
+                # created/imported; Wait-CaCAppPublished already retries the analogous case before
+                # Assignment, but Update can legitimately be attempted before that wait happens
+                # (e.g. re-running apply shortly after a Create). Tolerate it the same way as the
+                # Android restriction above - skip this Update, do not fail the whole run - since
+                # Assignment's own publish-wait will still gate whether users actually see the app.
+                $isTolerablePublishingStateRestriction = $_.Exception.Message -like '*400 (Bad Request)*' -and
+                    $_.Exception.Message -like "*PublishingState is not*"
+
+                if (-not $isTolerableAndroidStoreAppRestriction -and -not $isTolerablePublishingStateRestriction) {
                     throw
                 }
             }

@@ -151,6 +151,73 @@ Describe 'Deployment action propagation' {
             Should -Be 'Failed'
     }
 
+    It 'tolerates a 400 "PublishingState is not Published" on any app Update action (transient, Microsoft-managed sync state)' {
+        # Observed live (2026-09-10): a store app (iOS or Android) whose Intune-side metadata sync
+        # from the App Store/Play Store has not finished yet rejects ANY PATCH with this error.
+        # publishingState is documented as read-only/not settable via API and normally clears on
+        # its own - this is not scoped to one app type (unlike the Android RoleScopeTagIds
+        # restriction above), since it reflects app lifecycle state rather than a resource-type
+        # quirk.
+        $anyApp = $script:Configuration.Apps | Select-Object -First 1
+        $plan = [pscustomobject]@{
+            Kind    = 'App'
+            Action  = 'Update'
+            Target  = $anyApp.payload.displayName
+            Details = @()
+            Data    = [pscustomobject]@{
+                App = $anyApp
+                Id  = 'existing-object-id'
+            }
+        }
+
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            if ($Method -eq 'PATCH' -and $Uri -match 'mobileApps') {
+                throw 'Response status code does not indicate success: 400 (Bad Request). Response body: ' +
+                '{"error":{"code":"BadRequest","message":"Invalid operation: app''s PublishingState is not ''Published''."}}'
+            }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        $results | Where-Object Action -EQ 'Update app' | Select-Object -ExpandProperty Status |
+            Should -Be 'Applied'
+    }
+
+    It 'does NOT tolerate a 400 that merely mentions Published in unrelated app Update error text' {
+        $nonAndroidApp = $script:Configuration.Apps | Where-Object { $_.payload.'@odata.type' -ne '#microsoft.graph.androidManagedStoreApp' } |
+            Select-Object -First 1
+        $plan = [pscustomobject]@{
+            Kind    = 'App'
+            Action  = 'Update'
+            Target  = $nonAndroidApp.payload.displayName
+            Details = @()
+            Data    = [pscustomobject]@{
+                App = $nonAndroidApp
+                Id  = 'existing-object-id'
+            }
+        }
+
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            if ($Method -eq 'PATCH' -and $Uri -match 'mobileApps') {
+                throw 'Response status code does not indicate success: 400 (Bad Request). Response body: ' +
+                '{"error":{"code":"BadRequest","message":"Some unrelated validation failure."}}'
+            }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        $results | Where-Object Action -EQ 'Update app' | Select-Object -ExpandProperty Status |
+            Should -Be 'Failed'
+    }
+
     It 'does not silently ignore a failed action in an apply plan' {
         $group = $script:Configuration.Groups | Select-Object -First 1
         $plan = [pscustomobject]@{
