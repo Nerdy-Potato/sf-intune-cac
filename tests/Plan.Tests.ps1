@@ -151,6 +151,10 @@ BeforeAll {
                 '^deviceAppManagement/mobileApps/(?<id>[^/]+)/assignments$' {
                     return [pscustomobject]@{ value = @($State.AppAssignments[$Matches.id]) }
                 }
+                '^deviceManagement/configurationPolicies/(?<id>[^/]+)/settings$' {
+                    $policy = @($State.Policies['configurationPolicies'] | Where-Object id -EQ $Matches.id | Select-Object -First 1)
+                    return [pscustomobject]@{ value = @($policy.settings) }
+                }
                 '/assignments$' {
                     $policyId = ($Uri -split '/')[-2]
                     return [pscustomobject]@{ value = @($State.Assignments[$policyId]) }
