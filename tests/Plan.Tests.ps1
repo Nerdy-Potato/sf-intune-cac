@@ -188,6 +188,50 @@ Describe 'Get-CaCResourceMap' {
     }
 }
 
+Describe 'Get-CaCPayloadDrift' {
+    It 'ignores server-generated Settings Catalog metadata when comparing settings trees' {
+        InModuleScope IntuneCaC {
+            $desired = @{
+                name = 'LAPS-Shell'
+                settings = @(
+                    @{
+                        settingInstance = @{
+                            '@odata.type' = '#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance'
+                            settingDefinitionId = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled'
+                            choiceSettingValue = @{
+                                value = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled_1'
+                                children = @()
+                            }
+                        }
+                    }
+                )
+            }
+
+            $actual = [pscustomobject]@{
+                name = 'LAPS-Shell'
+                settings = @(
+                    [pscustomobject]@{
+                        id = '0'
+                        settingInstance = [pscustomobject]@{
+                            '@odata.type' = '#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance'
+                            settingDefinitionId = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled'
+                            settingInstanceTemplateReference = $null
+                            auditRuleInformation = $null
+                            choiceSettingValue = [pscustomobject]@{
+                                settingValueTemplateReference = $null
+                                value = 'device_vendor_msft_policy_config_admx_admpwd_pol_admpwd_enabled_1'
+                                children = @()
+                            }
+                        }
+                    }
+                )
+            }
+
+            Get-CaCPayloadDrift -Desired $desired -Actual $actual | Should -BeNullOrEmpty
+        }
+    }
+}
+
 Describe 'New-CaCPlan' {
     Context 'against an empty tenant' {
         BeforeAll {
