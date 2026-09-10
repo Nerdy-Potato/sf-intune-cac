@@ -44,7 +44,26 @@ BeforeAll {
                     $remote[$key] = $policy.payload[$key]
                 }
 
-                $endpoint = $policy.resource
+                # Mirror Get-CaCPolicyPayload's outbound remap: resource kinds with a
+                # RemoteNameProperty other than 'displayName' (currently only Settings Catalog's
+                # deviceManagementConfigurationPolicies) expose their name/no @odata.type on the
+                # live object too, so the fake tenant's remote objects must look the same way.
+                $resourceMap = InModuleScope IntuneCaC -Parameters @{ ResourceName = $policy.resource } {
+                    param($ResourceName)
+                    Get-CaCResourceMap -Resource $ResourceName
+                }
+                $remoteNameProperty = if ($resourceMap.ContainsKey('RemoteNameProperty')) { $resourceMap.RemoteNameProperty } else { 'displayName' }
+                if ($remoteNameProperty -ne 'displayName') {
+                    $remote[$remoteNameProperty] = $remote['displayName']
+                    $remote.Remove('displayName')
+                    $remote.Remove('@odata.type')
+                }
+
+                # The fake tenant is keyed by the last segment of the real Graph endpoint path
+                # (what the fake invoker's default handler extracts from the request URI), which
+                # is not always identical to the config-side resource name (e.g.
+                # deviceManagementConfigurationPolicies -> .../configurationPolicies).
+                $endpoint = ($resourceMap.Path -split '/')[-1]
                 if (-not $state.Policies.ContainsKey($endpoint)) { $state.Policies[$endpoint] = @() }
                 $state.Policies[$endpoint] += [pscustomobject] $remote
 

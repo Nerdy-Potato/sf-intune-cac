@@ -117,9 +117,16 @@ Describe 'Repository configuration' {
     }
 
     It 'marks every policy as managed by this repository' {
+        # The adult local-admin policy adopts a pre-existing live object; its displayName is
+        # intentionally the live object's real name ("SF Adults Local Admin"), not the CaC prefix.
+        # See config/tenant.json's adoption.policies entry and Test-CaCConfiguration's
+        # adoption/policy-* + policy/name-prefix rules.
+        $adoptedPolicyIds = @($script:Config.Tenant.adoption.policies | ForEach-Object { $_.id })
         foreach ($policy in $script:Config.Policies) {
             $policy.payload.description | Should -BeLike "*$($script:Config.Tenant.managedMarker)*"
-            $policy.payload.displayName | Should -BeLike "$($script:Config.Tenant.namePrefix) - *"
+            if ($policy.name -notin $adoptedPolicyIds) {
+                $policy.payload.displayName | Should -BeLike "$($script:Config.Tenant.namePrefix) - *"
+            }
         }
     }
 
