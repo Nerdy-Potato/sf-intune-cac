@@ -218,6 +218,51 @@ Describe 'Deployment action propagation' {
             Should -Be 'Failed'
     }
 
+    It 'does not double the managed marker when adopting a policy whose authored description already contains it' {
+        # Regression (2026-09-10): every current policy config bakes the managed marker directly
+        # into payload.description (e.g. "Managed by sf-intune-cac. Do not edit in the portal.").
+        # Adopt-policy's empty-existing-description branch used to unconditionally append the
+        # marker again, producing a doubled description on the live object ("...portal. Managed
+        # by sf-intune-cac. Do not edit in the portal.") which then showed up as perpetual
+        # "Update Policy" drift on every subsequent plan.
+        $policy = $script:Configuration.Policies |
+            Where-Object { $_.payload.description -like "*$($script:Configuration.Tenant.managedMarker)*" } |
+            Select-Object -First 1
+        $policy | Should -Not -BeNullOrEmpty -Because 'at least one configured policy should already bake in the managed marker'
+
+        $plan = [pscustomobject]@{
+            Kind    = 'Policy'
+            Action  = 'Adopt'
+            Target  = $policy.payload.displayName
+            Details = @()
+            Data    = [pscustomobject]@{
+                Policy              = $policy
+                ExistingDescription = ''
+            }
+            ObjectId = 'existing-object-id'
+        }
+
+        $capturedBody = $null
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            if ($Method -eq 'PATCH') {
+                $script:capturedBody = $Body
+                return [pscustomobject]@{}
+            }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        $results | Where-Object Action -EQ 'Adopt policy' | Select-Object -ExpandProperty Status |
+            Should -Be 'Applied'
+        $script:capturedBody.description | Should -Be $policy.payload.description
+        [regex]::Matches($script:capturedBody.description, [regex]::Escape($script:Configuration.Tenant.managedMarker)).Count |
+            Should -Be 1
+    }
+
     It 'does not silently ignore a failed action in an apply plan' {
         $group = $script:Configuration.Groups | Select-Object -First 1
         $plan = [pscustomobject]@{

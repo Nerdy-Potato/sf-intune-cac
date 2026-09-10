@@ -362,11 +362,21 @@ function Invoke-CaCPlan {
 
         $operation = Invoke-CaCAction -Action 'Adopt policy' -Target $action.Target -Operation {
             $existingDescription = [string] $adoptPolicyAction.Data.ExistingDescription
+            $configuredDescription = [string] $policy.payload.description
             $description = if ($existingDescription -like "*$($Configuration.Tenant.managedMarker)*") {
                 $existingDescription
             }
             elseif ([string]::IsNullOrWhiteSpace($existingDescription)) {
-                '{0} {1}' -f $policy.payload.description, $Configuration.Tenant.managedMarker
+                # The authored payload description already contains the managed marker for
+                # every current policy (config authors bake it in directly), so appending the
+                # marker again here would double it up (e.g. "...portal. Managed by
+                # sf-intune-cac. Do not edit in the portal."). Only append when it's missing.
+                if ($configuredDescription -like "*$($Configuration.Tenant.managedMarker)*") {
+                    $configuredDescription
+                }
+                else {
+                    '{0} {1}' -f $configuredDescription, $Configuration.Tenant.managedMarker
+                }
             }
             else {
                 '{0} {1}' -f $existingDescription.Trim(), $Configuration.Tenant.managedMarker
@@ -412,6 +422,8 @@ function Invoke-CaCPlan {
                 $existingDescription
             }
             elseif ([string]::IsNullOrWhiteSpace($existingDescription)) {
+                # As with policy adoption, the authored app payload description may already
+                # contain the marker; only append it if it's actually missing to avoid doubling.
                 [string] $app.payload.description
             }
             else {
