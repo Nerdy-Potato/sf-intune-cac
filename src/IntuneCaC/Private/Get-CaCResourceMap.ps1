@@ -70,6 +70,19 @@ function Get-CaCResourceMap {
             AssignAction       = 'assign'
             SupportsApps       = $false
             RemoteNameProperty = 'name'
+            # Confirmed live (2026-09-10): Microsoft Graph permanently rejects PATCH bodies that
+            # include the `settings` navigation property on an existing configurationPolicies
+            # object - "Cannot apply PATCH to navigation property 'settings' on entity type
+            # 'microsoft.management.services.api.deviceManagementConfigurationPolicy'." This is a
+            # platform limitation (not tenant/permission specific - same restriction reported
+            # across the community, e.g. microsoftgraph/powershell-intune-samples#286), distinct
+            # from deviceEnrollmentConfigurations' write-blocked-entirely restriction: creates
+            # (POST) with inline settings work fine, and PATCH of other scalar properties
+            # (name/description) also works - only `settings` cannot be updated in place via API.
+            # New-CaCPlan/Invoke-CaCPlan use this flag to omit `settings` from Update PATCH bodies
+            # and report settings drift as a manual portal step instead of attempting (and
+            # permanently failing) the call.
+            SettingsUpdateRequiresPortalApply = $true
         }
     }
 
