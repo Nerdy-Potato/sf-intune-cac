@@ -490,9 +490,15 @@ function Invoke-CaCPlan {
                 # it and Graph returns 400 "property 'AppStoreUrl' cannot be patched". Drop it from
                 # the update payload; Create (above) still sends it, since it's required and
                 # accepted there. This is distinct from the Android quirk caught below.
+                #
+                # $app.payload can be either a hashtable (built in-process, e.g. by tests) or a
+                # PSCustomObject (deserialized from a reviewed-plan JSON artifact in the real apply
+                # workflow) - use Test-CaCHasProperty/Get-CaCProperty rather than the
+                # hashtable-only .ContainsKey()/.Remove(), which throw on PSCustomObject.
                 $updatePayload = $app.payload
-                if ($updatePayload.'@odata.type' -eq '#microsoft.graph.iosStoreApp' -and $updatePayload.ContainsKey('appStoreUrl')) {
-                    $updatePayload = $updatePayload.Clone()
+                if ((Get-CaCProperty -InputObject $updatePayload -Name '@odata.type') -eq '#microsoft.graph.iosStoreApp' -and
+                    (Test-CaCHasProperty -InputObject $updatePayload -Name 'appStoreUrl')) {
+                    $updatePayload = $updatePayload | ConvertTo-Json -Depth 25 | ConvertFrom-Json -AsHashtable
                     $updatePayload.Remove('appStoreUrl')
                 }
                 & $GraphInvoker 'PATCH' "deviceAppManagement/mobileApps/$($updateAppAction.Data.Id)" $updatePayload | Out-Null

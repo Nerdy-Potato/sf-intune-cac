@@ -741,6 +741,42 @@ Describe 'Invoke-CaCPlan' {
         $patchCall.Body.displayName | Should -Be $copilot.payload.displayName
     }
 
+    It 'never sends appStoreUrl in an iosStoreApp update PATCH when applying a JSON-round-tripped reviewed plan' {
+        # Regression test for a real production incident (2026-09-10): a reviewed-plan JSON
+        # artifact deserializes App/Policy payloads as PSCustomObject, not hashtable. The
+        # iosStoreApp appStoreUrl-strip logic used to call the hashtable-only .ContainsKey()/
+        # .Clone() directly on $app.payload, which threw "[PSCustomObject] does not contain a
+        # method named 'ContainsKey'" and aborted every ios-copilot/ios-onedrive Update in the
+        # real apply workflow (which always applies a JSON round-tripped plan, unlike most other
+        # tests in this file that apply the in-process plan object directly).
+        $state = New-FakeTenant -InSync
+        $copilot = $script:Config.Apps | Where-Object id -EQ 'ios-copilot'
+        $remoteCopilot = $state.Apps | Where-Object {
+            $_.PSObject.Properties['bundleId'] -and $_.bundleId -eq $copilot.payload.bundleId
+        } | Select-Object -First 1
+        $remoteCopilot.description = 'stale description from before this app was managed. Managed by sf-intune-cac.'
+
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+        $roundTripped = $plan | ConvertTo-Json -Depth 50 | ConvertFrom-Json
+        $updateAction = $roundTripped | Where-Object { $_.Kind -eq 'App' -and $_.Target -eq $copilot.payload.displayName -and $_.Action -eq 'Update' }
+        $updateAction | Should -Not -BeNullOrEmpty
+        $updateAction.Data.App.payload | Should -BeOfType [System.Management.Automation.PSCustomObject] -Because 'JSON round-tripping (as the real apply workflow does) produces PSCustomObject, not hashtable'
+
+        $applyState = New-FakeTenant -InSync
+        $applyCopilot = $applyState.Apps | Where-Object {
+            $_.PSObject.Properties['bundleId'] -and $_.bundleId -eq $copilot.payload.bundleId
+        } | Select-Object -First 1
+        $applyCopilot.description = $remoteCopilot.description
+        $applyInvoker = New-FakeInvoker -State $applyState
+
+        $results = Invoke-CaCPlan -Plan @($updateAction) -Configuration $script:Config -GraphInvoker $applyInvoker -Confirm:$false
+
+        @($results | Where-Object Status -eq 'Failed') | Should -BeNullOrEmpty
+        $patchCall = $applyState.Calls | Where-Object { $_.Method -eq 'PATCH' -and $_.Uri -like "deviceAppManagement/mobileApps/$($remoteCopilot.id)" }
+        $patchCall | Should -Not -BeNullOrEmpty
+        $patchCall.Body.ContainsKey('appStoreUrl') | Should -BeFalse
+    }
+
     It 'waits for a store app to reach the published state before assigning it' {
         $app = [pscustomobject]@{
             id          = 'android-edge'
