@@ -263,6 +263,82 @@ Describe 'Deployment action propagation' {
             Should -Be 1
     }
 
+    It 'auto-applies a description-only Update for a Settings Catalog policy instead of requiring manual portal action' {
+        # Regression (2026-09-10): Update actions for deviceManagementConfigurationPolicies
+        # (Settings Catalog, UpdateRequiresPortalApply=true) were unconditionally routed to
+        # ManualActionRequired, even though Graph's PATCH explicitly supports Name/Description -
+        # only Settings and other structural fields are rejected. This meant a description-only
+        # drift (e.g. the doubled managed-marker bug fixed above) could never self-heal via a
+        # normal apply and would require someone to fix it by hand in the portal every time.
+        $policy = $script:Configuration.Policies |
+            Where-Object { $_.resource -eq 'deviceManagementConfigurationPolicies' } |
+            Select-Object -First 1
+        $policy | Should -Not -BeNullOrEmpty -Because 'at least one configured policy should be a Settings Catalog policy'
+
+        $plan = [pscustomobject]@{
+            Kind    = 'Policy'
+            Action  = 'Update'
+            Target  = $policy.payload.displayName
+            Details = @("description: 'stale description' -> '$($policy.payload.description)'")
+            Data    = [pscustomobject]@{
+                Policy = $policy
+                Id     = 'existing-object-id'
+            }
+        }
+
+        $capturedBody = $null
+        $capturedUri = $null
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            if ($Method -eq 'PATCH') {
+                $script:capturedUri = $Uri
+                $script:capturedBody = $Body
+                return [pscustomobject]@{}
+            }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        $results | Where-Object Action -EQ 'Update policy' | Select-Object -ExpandProperty Status |
+            Should -Be 'Applied'
+        $script:capturedUri | Should -Match 'existing-object-id$'
+        $script:capturedBody.description | Should -Be $policy.payload.description
+        $script:capturedBody.Keys | Should -Not -Contain 'settings'
+    }
+
+    It 'still requires manual portal action for Settings Catalog Update drift beyond description/name' {
+        $policy = $script:Configuration.Policies |
+            Where-Object { $_.resource -eq 'deviceManagementConfigurationPolicies' } |
+            Select-Object -First 1
+        $policy | Should -Not -BeNullOrEmpty
+
+        $plan = [pscustomobject]@{
+            Kind    = 'Policy'
+            Action  = 'Update'
+            Target  = $policy.payload.displayName
+            Details = @('settings: <settings tree differs>')
+            Data    = [pscustomobject]@{
+                Policy = $policy
+                Id     = 'existing-object-id'
+            }
+        }
+
+        $invoker = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'GET') { return [pscustomobject]@{ value = @() } }
+            throw "Unexpected write: $Method $Uri"
+        }
+
+        $results = Invoke-CaCPlan -Plan @($plan) -Configuration $script:Configuration `
+            -GraphInvoker $invoker -Confirm:$false
+
+        $results | Where-Object Action -EQ 'Update policy' | Select-Object -ExpandProperty Status |
+            Should -Be 'ManualActionRequired'
+    }
+
     It 'does not silently ignore a failed action in an apply plan' {
         $group = $script:Configuration.Groups | Select-Object -First 1
         $plan = [pscustomobject]@{
