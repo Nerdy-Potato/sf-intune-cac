@@ -300,7 +300,7 @@ function New-CaCPlan {
             }
 
             if ($adoptionSpec -and -not $alreadyManaged) {
-                if (Test-CaCAdoptionPolicyIdentity -Object $remote -Spec $adoptionSpec) {
+                if (Test-CaCAdoptionPolicyIdentity -Object $remote -Spec $adoptionSpec -NameProperty $remoteNameProperty) {
                     $adopted = $true
                     Add-Action -Kind 'Policy' -Action 'Adopt' -Target $policy.payload.displayName -Data ([pscustomobject]@{
                             Policy              = $policy
