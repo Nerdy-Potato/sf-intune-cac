@@ -1,0 +1,94 @@
+{
+  "$schema": "../../../schemas/policy.schema.json",
+  "comment": [
+    "New Settings Catalog policy (no live example to adopt): additively adds CaC-Tier-Teen",
+    "members to local Administrators on any Windows device they self-enroll. Same CSP shape",
+    "as local-admin-adult-all-device-tiers.json, swapping the member SID for CaC-Tier-Teen",
+    "(group id 0b6f1bf2-882b-4b60-a857-6e539d2b0b4f, AAD-encoded SID",
+    "S-1-12-1-191831026-1264617515-1399740328-1326132125).",
+    "Assignment: include sg-devices-teen and sg-devices-child (teens get admin on their own",
+    "tier plus the child device pool), explicitly EXCLUDE sg-devices-adult (must not inherit",
+    "adult-machine admin) and sg-breakglass (defense in depth).",
+    "Confirmation gaps (per Morpheus's design, unresolved, same as the adult policy): exact",
+    "settingDefinitionId strings and Add-vs-Replace actiontype semantics were only verified",
+    "against the live 'SF Adults Local Admin' policy, not against a freshly-created teen-scoped",
+    "instance; user-vs-device assignment targeting for this device-scoped CSP has not been",
+    "live-verified either. See .squad/decisions/inbox/morpheus-teen-local-admin-and-device-prep-design.md."
+  ],
+  "name": "local-admin-teen",
+  "resource": "deviceManagementConfigurationPolicies",
+  "assignments": [
+    { "group": "sg-devices-teen", "intent": "include" },
+    { "group": "sg-devices-child", "intent": "include" },
+    { "group": "sg-devices-adult", "intent": "exclude" },
+    { "group": "sg-breakglass", "intent": "exclude" }
+  ],
+  "payload": {
+    "@odata.type": "#microsoft.graph.deviceManagementConfigurationPolicy",
+    "displayName": "CaC - Local Admin - Teen Tier",
+    "description": "Managed by sf-intune-cac. Do not edit in the portal.",
+    "platforms": "windows10",
+    "technologies": "mdm",
+    "settings": [
+      {
+        "settingInstance": {
+          "@odata.type": "#microsoft.graph.deviceManagementConfigurationGroupSettingCollectionInstance",
+          "settingDefinitionId": "device_vendor_msft_policy_config_localusersandgroups_configure",
+          "groupSettingCollectionValue": [
+            {
+              "children": [
+                {
+                  "@odata.type": "#microsoft.graph.deviceManagementConfigurationGroupSettingCollectionInstance",
+                  "settingDefinitionId": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup",
+                  "groupSettingCollectionValue": [
+                    {
+                      "children": [
+                        {
+                          "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingCollectionInstance",
+                          "settingDefinitionId": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup_desc",
+                          "choiceSettingCollectionValue": [
+                            {
+                              "value": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup_desc_administrators",
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+                          "settingDefinitionId": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup_action",
+                          "choiceSettingValue": {
+                            "value": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup_action_add_update",
+                            "children": []
+                          }
+                        },
+                        {
+                          "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+                          "settingDefinitionId": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup_userselectiontype",
+                          "choiceSettingValue": {
+                            "value": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup_userselectiontype_users",
+                            "children": [
+                              {
+                                "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingCollectionInstance",
+                                "settingDefinitionId": "device_vendor_msft_policy_config_localusersandgroups_configure_groupconfiguration_accessgroup_users",
+                                "simpleSettingCollectionValue": [
+                                  {
+                                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
+                                    "value": "S-1-12-1-191831026-1264617515-1399740328-1326132125"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
