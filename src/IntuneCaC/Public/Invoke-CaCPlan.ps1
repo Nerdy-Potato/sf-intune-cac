@@ -679,6 +679,32 @@ function Invoke-CaCPlan {
         # Creates (POST with the full payload) are unaffected and still handled normally below.
         if ($action.Action -eq 'Update' -and [bool] (Get-CaCProperty -InputObject $endpoint -Name 'UpdateRequiresPortalApply')) {
             $existingId = Get-CaCProperty -InputObject $actionData -Name 'Id'
+
+            # Description-only (and/or name-only) drift IS safely PATCH-able even for these
+            # resource kinds - Graph explicitly documents Name/Description as valid PATCH
+            # properties (see the UpdateRequiresPortalApply comment above); only Settings and
+            # other structural fields are rejected. Apply that narrow PATCH directly instead of
+            # forcing a manual portal step for what is often just the managed-marker description
+            # (e.g. self-correcting a doubled marker from a prior adoption bug).
+            $driftFields = @($action.Details | ForEach-Object { ($_ -split ':', 2)[0].Trim() })
+            if ($driftFields -and (@($driftFields | Where-Object { $_ -notin @('description', 'name') })).Count -eq 0) {
+                if (-not $PSCmdlet.ShouldProcess($action.Target, "$($action.Action) policy")) { continue }
+
+                $descriptionPatch = [string] $policy.payload.description
+                $operation = Invoke-CaCAction -Action "$($action.Action) policy" -Target $action.Target -Operation {
+                    & $GraphInvoker 'PATCH' "$($endpoint.Path)/$existingId" @{ description = $descriptionPatch } | Out-Null
+                    $existingId
+                }
+                if (-not $operation.Succeeded) {
+                    $failedPolicyNames[$policy.payload.displayName] = $true
+                    continue
+                }
+                $policyIds[$policy.payload.displayName] = $operation.Value
+                Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'Applied' `
+                    -Message ($action.Details -join '; ')
+                continue
+            }
+
             Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'ManualActionRequired' -Message (
                 "Microsoft Graph does not support updating this policy's settings in place (PATCH only accepts " +
                 "Name/Description, and rejects Settings entirely). Detected drift: $($action.Details -join '; '). " +
