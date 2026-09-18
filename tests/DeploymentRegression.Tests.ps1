@@ -13,6 +13,8 @@ BeforeAll {
     $script:StuckAppWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/remediate-stuck-app.yml') -Raw
     $script:OrphanPolicyBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Remove-CaCOrphanConfigurationPolicy.ps1') -Raw
     $script:OrphanPolicyWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/remove-orphan-configuration-policy.yml') -Raw
+    $script:AutopilotInventoryBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Get-CaCAutopilotDeploymentProfileInventory.ps1') -Raw
+    $script:AutopilotInventoryWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/inventory-autopilot-profiles.yml') -Raw
     $script:IosGsa = Get-Content -Path (Join-Path $script:RepoRoot 'config/intune/device-configuration/ios-gsa-child.json') -Raw |
         ConvertFrom-Json
 }
@@ -514,6 +516,18 @@ Describe 'Workflow trigger and permission safety' {
         $script:OrphanPolicyWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
         $script:OrphanPolicyWorkflow | Should -Match 'Remove-CaCOrphanConfigurationPolicy\.ps1'
         $script:OrphanPolicyWorkflow | Should -Match 'Confirm:\$false'
+    }
+
+    It 'keeps Autopilot profile inventory read-only behind the plan environment' {
+        $script:AutopilotInventoryWorkflow | Should -Match 'workflow_dispatch:'
+        $script:AutopilotInventoryWorkflow | Should -Not -Match '(?m)^\s*pull_request:\s*$'
+        $script:AutopilotInventoryWorkflow | Should -Not -Match '(?m)^\s*push:\s*$'
+        $script:AutopilotInventoryWorkflow | Should -Match '(?m)^\s*environment:\s*plan\s*$'
+        $script:AutopilotInventoryWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_PLAN_CLIENT_ID\s*\}\}'
+        $script:AutopilotInventoryWorkflow | Should -Match 'Get-CaCAutopilotDeploymentProfileInventory\.ps1'
+        $script:AutopilotInventoryBootstrap | Should -Match 'Connect-CaCGraph\s+-TenantId\s+\$TenantId\s+-ClientId\s+\$ClientId\s+-ReadOnly'
+        $script:AutopilotInventoryBootstrap | Should -Match 'windowsAutopilotDeploymentProfiles'
+        $script:AutopilotInventoryBootstrap | Should -Match 'userType'
     }
 }
 
