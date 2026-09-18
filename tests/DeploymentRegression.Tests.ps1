@@ -11,6 +11,8 @@ BeforeAll {
     $script:Bootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1') -Raw
     $script:StuckAppBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Remove-CaCStuckApp.ps1') -Raw
     $script:StuckAppWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/remediate-stuck-app.yml') -Raw
+    $script:OrphanPolicyBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Remove-CaCOrphanConfigurationPolicy.ps1') -Raw
+    $script:OrphanPolicyWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/remove-orphan-configuration-policy.yml') -Raw
     $script:IosGsa = Get-Content -Path (Join-Path $script:RepoRoot 'config/intune/device-configuration/ios-gsa-child.json') -Raw |
         ConvertFrom-Json
 }
@@ -498,6 +500,21 @@ Describe 'Workflow trigger and permission safety' {
     It 'invokes stuck-app remediation non-interactively so ShouldProcess does not prompt on the runner' {
         $script:StuckAppWorkflow | Should -Match 'Remove-CaCStuckApp\.ps1\s+-AppId\s+\$appIds\s+-Confirm:\$false'
     }
+
+    It 'keeps orphan policy remediation manual-only and confirmation gated' {
+        $script:OrphanPolicyWorkflow | Should -Match 'workflow_dispatch:'
+        $script:OrphanPolicyWorkflow | Should -Not -Match '(?m)^\s*pull_request:\s*$'
+        $script:OrphanPolicyWorkflow | Should -Not -Match '(?m)^\s*push:\s*$'
+        $script:OrphanPolicyWorkflow | Should -Match 'display_name:'
+        $script:OrphanPolicyWorkflow | Should -Match 'confirm:'
+        $script:OrphanPolicyWorkflow | Should -Match '(?is)confirm:.*?default:\s*false'
+        $script:OrphanPolicyWorkflow | Should -Match '(?m)^\s*contents:\s*read\s*$'
+        $script:OrphanPolicyWorkflow | Should -Match '(?m)^\s*id-token:\s*write\s*$'
+        $script:OrphanPolicyWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
+        $script:OrphanPolicyWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
+        $script:OrphanPolicyWorkflow | Should -Match 'Remove-CaCOrphanConfigurationPolicy\.ps1'
+        $script:OrphanPolicyWorkflow | Should -Match 'Confirm:\$false'
+    }
 }
 
 Describe 'Bootstrap and managed-object safety' {
@@ -521,6 +538,16 @@ Describe 'Bootstrap and managed-object safety' {
         $script:StuckAppBootstrap | Should -Match 'deviceAppManagement/mobileApps/\$\{normalizedAppId\}'
         $script:StuckAppBootstrap | Should -Match 'ShouldProcess'
         $script:StuckAppBootstrap | Should -Match 'DELETE'
+    }
+
+    It 'requires the managed marker before deleting an orphaned configuration policy' {
+        $script:OrphanPolicyBootstrap | Should -Match 'CmdletBinding\(SupportsShouldProcess,\s*ConfirmImpact\s*=\s*''High'''
+        $script:OrphanPolicyBootstrap | Should -Match 'Connect-CaCGraph\s+-TenantId\s+\$TenantId\s+-ClientId\s+\$ClientId'
+        $script:OrphanPolicyBootstrap | Should -Match 'NewBoundScriptBlock'
+        $script:OrphanPolicyBootstrap | Should -Match 'configurationPolicies\?'
+        $script:OrphanPolicyBootstrap | Should -Match 'does not carry the repository managed marker'
+        $script:OrphanPolicyBootstrap | Should -Match 'ShouldProcess'
+        $script:OrphanPolicyBootstrap | Should -Match 'DELETE'
     }
 
     It 'builds fully resolved GET and DELETE URIs for stuck app remediation' {
@@ -565,6 +592,58 @@ Describe 'Bootstrap and managed-object safety' {
         $capturedCalls[0].Uri | Should -Be 'deviceAppManagement/mobileApps/abc123?$select=id,displayName,publishingState'
         $capturedCalls[1].Method | Should -Be 'DELETE'
         $capturedCalls[1].Uri | Should -Be 'deviceAppManagement/mobileApps/abc123'
+    }
+
+    It 'builds fully resolved GET and DELETE URIs for orphan policy remediation' {
+        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/Remove-CaCOrphanConfigurationPolicy.ps1'
+        $capturedCalls = [System.Collections.Generic.List[object]]::new()
+
+        Mock -CommandName Import-Module {}
+        Mock -CommandName Connect-CaCGraph {}
+        Mock -CommandName Get-Module {
+            $fakeModule = [pscustomobject]@{}
+            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
+                param([scriptblock] $ScriptBlock)
+                $ScriptBlock
+            } -Force -PassThru
+        }
+        function Invoke-CaCGraphRequest {
+            param(
+                [string] $Method,
+                [string] $Uri,
+                $Body
+            )
+
+            $capturedCalls.Add([pscustomobject]@{
+                    Method = $Method
+                    Uri    = $Uri
+                    Body   = $Body
+                }) | Out-Null
+
+            if ($Method -eq 'GET' -and $Uri -match '^deviceManagement/configurationPolicies\?\`?\$filter=([^&]+)&') {
+                [System.Uri]::UnescapeDataString($Matches[1]) | Should -Be "name eq 'SF Adults Local Admin'"
+                return [pscustomobject]@{
+                    value = @([pscustomobject]@{
+                            id          = 'policy123'
+                            name        = 'SF Adults Local Admin'
+                            description = 'Managed by sf-intune-cac. Do not edit in the portal.'
+                        })
+                }
+            }
+
+            if ($Method -eq 'DELETE' -and $Uri -eq 'deviceManagement/configurationPolicies/policy123') {
+                return $null
+            }
+
+            throw "Unexpected Graph call: $Method $Uri"
+        }
+
+        & $scriptPath -DisplayName 'SF Adults Local Admin' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false
+
+        $capturedCalls | Should -HaveCount 2
+        $capturedCalls[0].Method | Should -Be 'GET'
+        $capturedCalls[1].Method | Should -Be 'DELETE'
+        $capturedCalls[1].Uri | Should -Be 'deviceManagement/configurationPolicies/policy123'
     }
 }
 
