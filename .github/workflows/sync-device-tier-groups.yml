@@ -1,0 +1,46 @@
+name: Sync device tier groups
+
+on:
+  schedule:
+    # Every 4 hours - catches a newly enrolled device within a few hours instead of relying on
+    # somebody remembering to add it to CaC-Devices-Adult/Teen/Child by hand.
+    - cron: '15 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-device-tier-groups
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Add enrolled Windows devices to their primary user's tier device group
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Sync device tier group membership
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          # -Confirm:$false disables the interactive ShouldProcess prompt, which has no
+          # interactive host to attach to on the runner and throws a null-reference error.
+          ./scripts/bootstrap/Sync-CaCDeviceTierGroups.ps1 -Confirm:$false

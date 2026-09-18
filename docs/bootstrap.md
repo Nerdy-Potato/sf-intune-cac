@@ -22,7 +22,7 @@ It creates, idempotently:
 | Application | Graph application roles | Federated subjects |
 | --- | --- | --- |
 | `sf-intune-cac-plan` | `DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `DeviceManagementServiceConfig.Read.All`, `Group.Read.All`, `User.Read.All` | Legacy and numeric-ID subjects for `pull_request` and `environment:plan` |
-| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `DeviceManagementServiceConfig.ReadWrite.All`, `Group.ReadWrite.All`, `User.Read.All` | Legacy and numeric-ID subjects for `environment:production` |
+| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `DeviceManagementServiceConfig.ReadWrite.All`, `DeviceManagementManagedDevices.Read.All`, `Device.Read.All`, `Group.ReadWrite.All`, `User.Read.All` | Legacy and numeric-ID subjects for `environment:production` |
 
 No client secrets are created. Both applications authenticate by exchanging GitHub's short-lived
 OIDC token, so there is nothing stored in GitHub and nothing to rotate.

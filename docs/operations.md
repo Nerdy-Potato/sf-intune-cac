@@ -34,6 +34,32 @@ against whatever is on `main` at the time it runs, and still refuses to apply a 
 GitHub, not this repo's workflow code) is the control to use if you want a manual check before
 apply - see [bootstrap.md](bootstrap.md) for setting that up.
 
+### Device missing from its tier device group
+
+If a device-scoped policy (most importantly local-admin or Windows LAPS) is not applying to an
+enrolled device, check whether the device is a member of its tier's device group
+(`CaC-Devices-Adult`/`-Teen`/`-Child` in the Entra admin center). The **Sync device tier groups**
+workflow (`sync-device-tier-groups.yml`) adds a newly enrolled device to the group matching its
+primary user's tier on a schedule (every 4 hours), but it can only add a device once that device
+has both an Entra device object and a resolved primary user - which can lag enrollment by a few
+minutes.
+
+To fix it immediately rather than waiting for the next scheduled run:
+
+```powershell
+gh workflow run sync-device-tier-groups.yml
+```
+
+Then trigger an Intune policy sync on the affected device (Company Portal, or Devices > the device
+> **Sync** in the Intune admin center) so it picks up the policy on its next check-in. As a last
+resort you can add the device to the group by hand in the Entra admin center - the sync workflow is
+additive and idempotent, so it will not object to that on its next run.
+
+If a device shows up as a `Conflict` in the workflow's run log, its primary user's tier no longer
+matches the device group it currently sits in (typically after a birthday moves someone up a tier).
+The workflow never removes a device from a group automatically; move it manually and review why the
+mismatch happened.
+
 ### Stuck Intune app remediation
 
 If a newly created Intune store app remains in Microsoft Graph `publishingState: processing` for

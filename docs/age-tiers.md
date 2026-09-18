@@ -50,6 +50,18 @@ The child tier also owns an explicit app catalog. Defender, authentication, and 
 365 apps are required; Edge remains available for self-service installation. Adding any other app is
 a reviewed change to `config/apps/approved-child-apps.json`.
 
-Each tier also has a corresponding manually managed device group: `CaC-Devices-Adult`,
-`CaC-Devices-Teen`, and `CaC-Devices-Child`. The repository creates these groups but does not alter
-their device membership.
+Each tier also has a corresponding device group: `CaC-Devices-Adult`, `CaC-Devices-Teen`, and
+`CaC-Devices-Child`. The repository creates these groups, but the normal plan/apply reconciliation
+loop deliberately never manages their device membership (`Get-CaCConfiguration` always reports an
+empty desired member list for a `memberType: device` group) - config-as-code has no signal for
+*which physical device* belongs to *which person*.
+
+That gap used to mean a human had to remember to add every newly enrolled device to its tier's
+device group by hand, and a missed step meant device-scoped policies assigned to that group (most
+importantly local-admin and Windows LAPS) silently never applied. The **Sync device tier groups**
+workflow (`.github/workflows/sync-device-tier-groups.yml`, backed by
+`scripts/bootstrap/Sync-CaCDeviceTierGroups.ps1`) now closes that gap on its own schedule: it reads
+each enrolled Windows device's primary user, looks up that user's tier from
+`config/identity/users.json`, and adds the device to the matching group if it is not already a
+member. It only adds - if a device ends up in the wrong tier's group (for example, after a birthday
+moves someone up a tier) it is reported as a conflict for manual review, never auto-removed.

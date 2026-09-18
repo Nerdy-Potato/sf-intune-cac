@@ -35,7 +35,7 @@
       "id": "sg-devices-adult",
       "displayName": "CaC-Devices-Adult",
       "mailNickname": "cac-devices-adult",
-      "description": "Device group corresponding to the adult tier. Devices are assigned manually.",
+      "description": "Device group corresponding to the adult tier. Membership is added automatically by the Sync device tier groups workflow, based on each device's primary user tier.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
@@ -44,7 +44,7 @@
       "id": "sg-devices-teen",
       "displayName": "CaC-Devices-Teen",
       "mailNickname": "cac-devices-teen",
-      "description": "Device group corresponding to the teen tier. Devices are assigned manually.",
+      "description": "Device group corresponding to the teen tier. Membership is added automatically by the Sync device tier groups workflow, based on each device's primary user tier.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
@@ -53,7 +53,7 @@
       "id": "sg-devices-child",
       "displayName": "CaC-Devices-Child",
       "mailNickname": "cac-devices-child",
-      "description": "Device group corresponding to the child tier. Devices are assigned manually.",
+      "description": "Device group corresponding to the child tier. Membership is added automatically by the Sync device tier groups workflow, based on each device's primary user tier.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }

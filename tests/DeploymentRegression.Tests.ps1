@@ -567,3 +567,125 @@ Describe 'Bootstrap and managed-object safety' {
         $capturedCalls[1].Uri | Should -Be 'deviceAppManagement/mobileApps/abc123'
     }
 }
+
+Describe 'Device tier group sync' {
+    BeforeAll {
+        $script:SyncWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/sync-device-tier-groups.yml') -Raw
+        $script:SyncBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Sync-CaCDeviceTierGroups.ps1') -Raw
+    }
+
+    It 'runs on a schedule with a write identity behind the production environment' {
+        $script:SyncWorkflow | Should -Match "(?m)^\s*-\s*cron:\s*'"
+        $script:SyncWorkflow | Should -Match 'workflow_dispatch:'
+        $script:SyncWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
+        $script:SyncWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
+        $script:SyncWorkflow | Should -Match 'Sync-CaCDeviceTierGroups\.ps1\s+-Confirm:\$false'
+    }
+
+    It 'never removes a device from a group automatically' {
+        $script:SyncBootstrap | Should -Not -Match "Method\s+'DELETE'"
+        $script:SyncBootstrap | Should -Match 'Conflict'
+        $script:SyncBootstrap | Should -Match 'Not removing automatically'
+    }
+
+    It 'grants the apply identity the roles Sync-CaCDeviceTierGroups needs' {
+        $identityScript = Get-Content -Path (Join-Path $script:RepoRoot 'bootstrap/New-CaCGitHubIdentity.ps1') -Raw
+        $identityScript | Should -Match 'DeviceManagementManagedDevices\.Read\.All'
+        $identityScript | Should -Match "'Device\.Read\.All'"
+    }
+
+    It 'adds a device to its primary user''s tier group and skips/conflicts as expected' {
+        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/Sync-CaCDeviceTierGroups.ps1'
+        $capturedCalls = [System.Collections.Generic.List[object]]::new()
+
+        $groupIds = @{
+            'CaC-Devices-Adult' = 'group-adult'
+            'CaC-Devices-Teen'  = 'group-teen'
+            'CaC-Devices-Child' = 'group-child'
+        }
+
+        # 'lucas' (teen) is pre-seeded as already a member of the adult device group, so the run
+        # must report a Conflict for him instead of silently leaving or removing him.
+        $existingMembers = @{
+            'group-adult' = @('device-obj-lucas')
+            'group-teen'  = @()
+            'group-child' = @()
+        }
+
+        $devices = @(
+            [pscustomobject]@{ deviceName = 'ROBIN-LAPTOP'; azureADDeviceId = 'aad-robin'; userPrincipalName = 'robin@spaid.family' }
+            [pscustomobject]@{ deviceName = 'LUCAS-LAPTOP'; azureADDeviceId = 'aad-lucas'; userPrincipalName = 'lucas@spaid.family' }
+            [pscustomobject]@{ deviceName = 'ADMIN-LAPTOP'; azureADDeviceId = 'aad-admin'; userPrincipalName = 'johnspaid@nerdypotato.onmicrosoft.com' }
+            [pscustomobject]@{ deviceName = 'STALE-LAPTOP'; azureADDeviceId = 'aad-stale'; userPrincipalName = 'robin@spaid.family' }
+        )
+
+        $directoryDeviceIds = @{
+            'aad-robin' = 'device-obj-robin'
+            'aad-lucas' = 'device-obj-lucas'
+            'aad-admin' = 'device-obj-admin'
+            # aad-stale intentionally has no matching directory device.
+        }
+
+        Mock -CommandName Import-Module {}
+        Mock -CommandName Connect-CaCGraph {}
+        Mock -CommandName Get-Module {
+            $fakeModule = [pscustomobject]@{}
+            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
+                param([scriptblock] $ScriptBlock)
+                $ScriptBlock
+            } -Force -PassThru
+        }
+
+        function Invoke-CaCGraphRequest {
+            param(
+                [string] $Method,
+                [string] $Uri,
+                $Body
+            )
+
+            $capturedCalls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body }) | Out-Null
+
+            if ($Method -eq 'GET' -and $Uri -match "^groups\?\`$filter=displayName eq '([^']+)'") {
+                $name = [System.Uri]::UnescapeDataString($Matches[1])
+                return [pscustomobject]@{ value = @([pscustomobject]@{ id = $groupIds[$name]; displayName = $name }) }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -match '^groups/([^/]+)/members\?') {
+                $groupId = $Matches[1]
+                $ids = @($existingMembers[$groupId])
+                return [pscustomobject]@{ value = @($ids | ForEach-Object { [pscustomobject]@{ id = $_ } }) }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -match "^deviceManagement/managedDevices\?") {
+                return [pscustomobject]@{ value = $devices }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -match "^devices\?\`$filter=deviceId eq '([^']+)'") {
+                $azureAdDeviceId = $Matches[1]
+                $objectId = $directoryDeviceIds[$azureAdDeviceId]
+                if ($objectId) {
+                    return [pscustomobject]@{ value = @([pscustomobject]@{ id = $objectId }) }
+                }
+                return [pscustomobject]@{ value = @() }
+            }
+
+            if ($Method -eq 'POST' -and $Uri -match '^groups/([^/]+)/members/\$ref$') {
+                return $null
+            }
+
+            throw "Unexpected Graph call: $Method $Uri"
+        }
+
+        $results = & $scriptPath -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false
+
+        ($results | Where-Object { $_.Device -eq 'ROBIN-LAPTOP' }).Status | Should -Be 'Added'
+        ($results | Where-Object { $_.Device -eq 'LUCAS-LAPTOP' }).Status | Should -Be 'Conflict'
+        ($results | Where-Object { $_.Device -eq 'ADMIN-LAPTOP' }).Status | Should -Be 'Skipped'
+        ($results | Where-Object { $_.Device -eq 'STALE-LAPTOP' }).Status | Should -Be 'Skipped'
+
+        $addCall = $capturedCalls | Where-Object { $_.Method -eq 'POST' }
+        $addCall | Should -HaveCount 1
+        $addCall.Uri | Should -Be 'groups/group-adult/members/$ref'
+        $addCall.Body.'@odata.id' | Should -Be 'https://graph.microsoft.com/v1.0/directoryObjects/device-obj-robin'
+    }
+}
