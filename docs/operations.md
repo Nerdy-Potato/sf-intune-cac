@@ -34,6 +34,35 @@ against whatever is on `main` at the time it runs, and still refuses to apply a 
 GitHub, not this repo's workflow code) is the control to use if you want a manual check before
 apply - see [bootstrap.md](bootstrap.md) for setting that up.
 
+### Device missing from its tier device group
+
+`CaC-Devices-Adult`/`-Teen`/`-Child` are dynamic groups: Entra ID adds a device automatically once
+it is Windows Autopilot-registered with the matching Group Tag (`CaC-Adult`/`CaC-Teen`/`CaC-Child`
+respectively - see [`age-tiers.md`](age-tiers.md)). If a device-scoped policy (most importantly
+local-admin or Windows LAPS) is not applying to an enrolled Windows device, check in this order:
+
+1. **Confirm the device's Group Tag.** Intune admin center > Devices > Enrollment > Windows
+   Autopilot devices > find the device > check its Group Tag column. If it is blank or wrong, fix
+   it:
+
+   ```powershell
+   gh workflow run set-autopilot-group-tag.yml -f serial_number='<serial>' -f tier='adult'
+   ```
+
+   (or run `scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` directly with Graph access.)
+2. **Confirm dynamic group membership caught up.** Entra ID re-evaluates dynamic group rules
+   automatically after a device attribute changes; this is normally fast for a tenant this size,
+   but allow a few minutes. Check membership on the group itself in the Entra admin center.
+3. **Trigger an Intune policy sync** on the affected device (Company Portal, or Devices > the
+   device > **Sync** in the Intune admin center) so it picks up the policy on its next check-in.
+
+Because these are dynamic groups, there is no manual "add to group" fallback - membership is
+Entra-computed from the Group Tag and cannot be overridden by adding the device by hand. If a
+device is enrolled via something other than Windows Autopilot (for example, an Android
+corporate-owned device targeting `CaC-Devices-Child`), it has no Group Tag to match on and must be
+added to the relevant device group by hand instead, since Group Tag dynamic rules are a Windows
+Autopilot-only mechanism.
+
 ### Stuck Intune app remediation
 
 If a newly created Intune store app remains in Microsoft Graph `publishingState: processing` for

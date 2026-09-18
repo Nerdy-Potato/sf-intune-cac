@@ -1,0 +1,55 @@
+name: Set Autopilot Group Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      serial_number:
+        description: 'Windows Autopilot device serial number'
+        type: string
+        required: true
+      tier:
+        description: 'Tier to tag the device for'
+        type: choice
+        required: true
+        options:
+          - adult
+          - teen
+          - child
+
+permissions:
+  contents: read
+
+concurrency:
+  group: set-autopilot-group-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Set Windows Autopilot Group Tag on a device
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Set Group Tag
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          # -Confirm:$false disables the interactive ShouldProcess prompt, which has no
+          # interactive host to attach to on the runner and throws a null-reference error.
+          ./scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1 -SerialNumber '${{ inputs.serial_number }}' -Tier '${{ inputs.tier }}' -Confirm:$false

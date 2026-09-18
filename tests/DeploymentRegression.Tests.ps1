@@ -567,3 +567,173 @@ Describe 'Bootstrap and managed-object safety' {
         $capturedCalls[1].Uri | Should -Be 'deviceAppManagement/mobileApps/abc123'
     }
 }
+
+Describe 'Device tier group dynamic membership' {
+    BeforeAll {
+        $script:ConvertBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1') -Raw
+        $script:ConvertWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/convert-device-tier-groups-to-dynamic.yml') -Raw
+        $script:SetTagBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1') -Raw
+        $script:SetTagWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/set-autopilot-group-tag.yml') -Raw
+    }
+
+    It 'gates the one-time group conversion behind explicit confirmation in production' {
+        $script:ConvertWorkflow | Should -Match 'workflow_dispatch:'
+        $script:ConvertWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
+        $script:ConvertWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
+        $script:ConvertWorkflow | Should -Match "inputs\.confirm.*-ne 'true'"
+        $script:ConvertWorkflow | Should -Match 'Convert-CaCDeviceTierGroupsToDynamic\.ps1\s+-Tier\s+\$tiers\s+-Confirm:\$false'
+    }
+
+    It 'refuses to delete a group that does not carry the managed marker' {
+        $script:ConvertBootstrap | Should -Match 'notlike\s+"\*\$marker\*"'
+        $script:ConvertBootstrap | Should -Match 'Refusing to delete a group this repository may not own'
+    }
+
+    It 'warns about members that will not carry over before deleting' {
+        $script:ConvertBootstrap | Should -Match 'will NOT carry over'
+    }
+
+    It 'builds a Group Tag membership rule per tier and creates dynamic groups' {
+        $script:ConvertBootstrap | Should -Match "adult = 'CaC-Adult'"
+        $script:ConvertBootstrap | Should -Match "teen\s+= 'CaC-Teen'"
+        $script:ConvertBootstrap | Should -Match "child = 'CaC-Child'"
+        $script:ConvertBootstrap | Should -Match 'devicePhysicalIds -any'
+        $script:ConvertBootstrap | Should -Match "groupTypes\s*=\s*@\('DynamicMembership'\)"
+        $script:ConvertBootstrap | Should -Match "membershipRuleProcessingState\s*=\s*'On'"
+    }
+
+    It 'gates the Group Tag workflow behind the production environment' {
+        $script:SetTagWorkflow | Should -Match 'workflow_dispatch:'
+        $script:SetTagWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
+        $script:SetTagWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
+        $script:SetTagWorkflow | Should -Match 'Set-CaCAutopilotGroupTag\.ps1'
+    }
+
+    It 'uses the same Tier-to-Group-Tag mapping as the group conversion script' {
+        $script:SetTagBootstrap | Should -Match "adult = 'CaC-Adult'"
+        $script:SetTagBootstrap | Should -Match "teen\s+= 'CaC-Teen'"
+        $script:SetTagBootstrap | Should -Match "child = 'CaC-Child'"
+        $script:SetTagBootstrap | Should -Match 'updateDeviceProperties'
+    }
+
+    It 'converts an assigned device group to dynamic and skips one that already is' {
+        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1'
+        $capturedCalls = [System.Collections.Generic.List[object]]::new()
+        $marker = 'Managed by sf-intune-cac. Do not edit in the portal.'
+
+        $remoteGroups = @{
+            'CaC-Devices-Adult' = [pscustomobject]@{
+                id          = 'old-adult-id'
+                displayName = 'CaC-Devices-Adult'
+                description = "Device group corresponding to the adult tier. $marker"
+                groupTypes  = @()
+            }
+            'CaC-Devices-Teen'  = [pscustomobject]@{
+                id          = 'dynamic-teen-id'
+                displayName = 'CaC-Devices-Teen'
+                description = "Device group corresponding to the teen tier. $marker"
+                groupTypes  = @('DynamicMembership')
+            }
+        }
+
+        Mock -CommandName Import-Module {}
+        Mock -CommandName Connect-CaCGraph {}
+        Mock -CommandName Get-Module {
+            $fakeModule = [pscustomobject]@{}
+            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
+                param([scriptblock] $ScriptBlock)
+                $ScriptBlock
+            } -Force -PassThru
+        }
+
+        function Invoke-CaCGraphRequest {
+            param(
+                [string] $Method,
+                [string] $Uri,
+                $Body
+            )
+
+            $capturedCalls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body }) | Out-Null
+
+            if ($Method -eq 'GET' -and $Uri -match "^groups\?\`$filter=([^&]+)&") {
+                $filter = [System.Uri]::UnescapeDataString($Matches[1])
+                if ($filter -notmatch "^displayName eq '([^']+)'$") {
+                    throw "Unexpected group filter: $filter"
+                }
+                $name = $Matches[1]
+                $match = $remoteGroups[$name]
+                if ($match) { return [pscustomobject]@{ value = @($match) } }
+                return [pscustomobject]@{ value = @() }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -match '^groups/([^/]+)/members\?') {
+                return [pscustomobject]@{ value = @() }
+            }
+
+            if ($Method -eq 'DELETE' -and $Uri -match '^groups/([^/]+)$') {
+                return $null
+            }
+
+            if ($Method -eq 'POST' -and $Uri -eq 'groups') {
+                return [pscustomobject]@{ id = 'new-group-id'; displayName = $Body.displayName }
+            }
+
+            throw "Unexpected Graph call: $Method $Uri"
+        }
+
+        & $scriptPath -Tier 'adult', 'teen' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false | Out-Null
+
+        $deleteCalls = $capturedCalls | Where-Object { $_.Method -eq 'DELETE' }
+        $deleteCalls | Should -HaveCount 1
+        $deleteCalls.Uri | Should -Be 'groups/old-adult-id'
+
+        $createCalls = $capturedCalls | Where-Object { $_.Method -eq 'POST' -and $_.Uri -eq 'groups' }
+        $createCalls | Should -HaveCount 1
+        $createCalls.Body.displayName | Should -Be 'CaC-Devices-Adult'
+        $createCalls.Body.groupTypes | Should -Contain 'DynamicMembership'
+        $createCalls.Body.membershipRule | Should -Match 'CaC-Adult'
+    }
+
+    It 'sets a device''s Group Tag by serial number' {
+        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1'
+        $capturedCalls = [System.Collections.Generic.List[object]]::new()
+
+        Mock -CommandName Import-Module {}
+        Mock -CommandName Connect-CaCGraph {}
+        Mock -CommandName Get-Module {
+            $fakeModule = [pscustomobject]@{}
+            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
+                param([scriptblock] $ScriptBlock)
+                $ScriptBlock
+            } -Force -PassThru
+        }
+
+        function Invoke-CaCGraphRequest {
+            param(
+                [string] $Method,
+                [string] $Uri,
+                $Body
+            )
+
+            $capturedCalls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body }) | Out-Null
+
+            if ($Method -eq 'GET' -and $Uri -match '^deviceManagement/windowsAutopilotDeviceIdentities\?\`?\$filter=(.+)$') {
+                [System.Uri]::UnescapeDataString($Matches[1]) | Should -Be "contains(serialNumber,'5CD1234ABC')"
+                return [pscustomobject]@{ value = @([pscustomobject]@{ id = 'autopilot-device-id'; groupTag = '' }) }
+            }
+
+            if ($Method -eq 'POST' -and $Uri -match '/updateDeviceProperties$') {
+                return $null
+            }
+
+            throw "Unexpected Graph call: $Method $Uri"
+        }
+
+        & $scriptPath -SerialNumber '5CD1234ABC' -Tier 'adult' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false | Out-Null
+
+        $postCall = $capturedCalls | Where-Object { $_.Method -eq 'POST' }
+        $postCall | Should -HaveCount 1
+        $postCall.Uri | Should -Be 'deviceManagement/windowsAutopilotDeviceIdentities/autopilot-device-id/updateDeviceProperties'
+        $postCall.Body.groupTag | Should -Be 'CaC-Adult'
+    }
+}
