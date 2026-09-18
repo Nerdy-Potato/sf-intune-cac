@@ -23,9 +23,7 @@ function Get-CaCAdoptionSpec {
         'android-spotify-kids', 'android-moonlight', 'android-steam-link',
         'android-windows-app', 'android-xbox'
     )
-    $adoptablePolicyIds = @(
-        'local-admin-adult-all-device-tiers'
-    )
+    $adoptablePolicyIds = @()
     if (($Kind -eq 'Group' -and $Id -notin $adoptableGroupIds) -or
         ($Kind -eq 'App' -and $Id -notin $adoptableAppIds) -or
         ($Kind -eq 'Policy' -and $Id -notin $adoptablePolicyIds)) {

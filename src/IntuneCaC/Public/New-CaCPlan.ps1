@@ -290,8 +290,7 @@ function New-CaCPlan {
 
             # Adopted policies, like adopted groups, are allowed to keep a foreign (non-namePrefix)
             # displayName forever - once the managed marker is present they are "already managed"
-            # on marker alone. Requiring NamePrefix here too would make adoption never settle into
-            # NoChange on subsequent runs, since "SF Adults Local Admin" never starts with "CaC".
+            # on marker alone.
             $alreadyManaged = if ($adoptionSpec) {
                 Test-CaCManagedObject -Object $remote -ManagedMarker $marker -NameProperty $remoteNameProperty
             }
