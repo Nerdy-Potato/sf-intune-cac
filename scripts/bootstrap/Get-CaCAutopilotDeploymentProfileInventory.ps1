@@ -67,13 +67,13 @@ $graphInvoker = $module.NewBoundScriptBlock({
 function Get-LocalGraphCollection {
     param([Parameter(Mandatory)][string] $Uri)
 
-    $items = New-Object System.Collections.Generic.List[object]
+    $items = @()
     $nextUri = $Uri
 
     while ($nextUri) {
         $response = & $graphInvoker 'GET' $nextUri $null
         foreach ($item in @($response.value)) {
-            $items.Add($item)
+            $items += $item
         }
         $nextUri = Get-LocalObjectProperty -InputObject $response -Name '@odata.nextLink'
     }
