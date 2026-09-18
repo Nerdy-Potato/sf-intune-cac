@@ -9,7 +9,7 @@ enrollment restriction, platform security profiles, approved app catalog, MDE, a
 | --- | --- | --- |
 | Android | Corporate-owned fully managed (Device Owner), Android 11+ | No personal profile, no unmanaged app sources, MDE required |
 | iPhone/iPad | Apple Automated Device Enrollment with supervision, iOS/iPadOS 16+ | Enrollment cannot be removed and the forced GSA VPN profile applies |
-| Windows | Windows Autopilot, Entra joined, standard user | Store remains blocked; software arrives through Intune |
+| Windows | Windows Autopilot, Entra joined. Adult/teen profiles make the joining user local administrator; child profile uses standard user. | Store remains blocked; software arrives through Intune |
 
 The child enrollment restriction blocks personally owned enrollment on all three platforms. It does
 not turn an arbitrary BYOD enrollment into a corporate device. Before a device is handed over:
@@ -18,8 +18,10 @@ not turn an arbitrary BYOD enrollment into a corporate device. Before a device i
    with supervision, user affinity, modern authentication, and locked enrollment.
 2. Use an Android corporate-owned fully managed enrollment token. Do not use work profile or Device
    Administrator enrollment.
-3. Register Windows hardware hashes with Autopilot and assign a user-driven Entra join profile that
-   creates a standard user. Run `bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1` first; it
+3. Register Windows hardware hashes with Autopilot and assign a user-driven Entra join profile. Adult
+   and teen profiles must use **User account type = Administrator** so the user joining the device is
+   made local administrator on that device only; child profiles must use **Standard**. Run
+   `bootstrap/Initialize-CaCAutopilotDevicePreparation.ps1` first; it
    makes the Intune Provisioning Client service principal the owner of the assigned child device group.
    The same script also supports `-Tier adult` and `-Tier teen` (default remains `child` for backward
    compatibility) to create/own the equivalent `CaC-Autopilot-DevicePreparation-Adult`/`-Teen` groups
@@ -32,7 +34,7 @@ not turn an arbitrary BYOD enrollment into a corporate device. Before a device i
    device's Windows Autopilot Group Tag to `CaC-Adult`, `CaC-Teen`, or `CaC-Child`** at hardware
    hash registration time (the CSV/portal import has a Group Tag column). This is what the
    `CaC-Devices-Adult`/`-Teen`/`-Child` dynamic groups match on, and those groups are what the
-   local-admin and Windows LAPS policies are assigned to - see [`age-tiers.md`](age-tiers.md). A
+   Windows LAPS and tier-specific device policies are assigned to - see [`age-tiers.md`](age-tiers.md). A
    device registered without the tag, or with the wrong one, will not receive those policies until
    the tag is corrected with `scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` (or the **Set
    Autopilot Group Tag** GitHub Actions workflow).
@@ -81,12 +83,14 @@ as the traffic forwarding profile above. This repository does not create or vali
 ## Windows local admin and LAPS
 
 Adult and teen productivity accounts do not need Entra ID or other cloud administrator roles to be
-local administrators on enrolled Windows devices. Local administrator membership is assigned by the
-device-scoped local users and groups Settings Catalog policies:
+local administrators on the Windows devices they enroll. Local administrator membership is assigned
+by the Windows Autopilot deployment profile's **User account type = Administrator** setting, which
+adds the user joining the device to that device's local Administrators group. Do not use the built-in
+**Azure AD Joined Device Local Administrator** directory role for this; that role grants local admin
+on every Entra-joined device.
 
-- Adults: `CaC-Tier-Adult` is added to Administrators on adult, teen, and child device groups.
-- Teens: `CaC-Tier-Teen` is added to Administrators on teen and child device groups.
-- Children: no child tier group is added to local Administrators.
+Child Windows deployment profiles must keep **User account type = Standard**. Children are not added
+to local Administrators.
 
 `CaC - Windows LAPS` configures Windows LAPS to rotate the password for the local administrator
 account named `x3nc0n`, but that setting alone does not create a custom local account in

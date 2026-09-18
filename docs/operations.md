@@ -39,7 +39,8 @@ apply - see [bootstrap.md](bootstrap.md) for setting that up.
 `CaC-Devices-Adult`/`-Teen`/`-Child` are dynamic groups: Entra ID adds a device automatically once
 it is Windows Autopilot-registered with the matching Group Tag (`CaC-Adult`/`CaC-Teen`/`CaC-Child`
 respectively - see [`age-tiers.md`](age-tiers.md)). If a device-scoped policy (most importantly
-local-admin or Windows LAPS) is not applying to an enrolled Windows device, check in this order:
+Windows LAPS or tier-specific restrictions) is not applying to an enrolled Windows device, check in
+this order:
 
 1. **Confirm the device's Group Tag.** Intune admin center > Devices > Enrollment > Windows
    Autopilot devices > find the device > check its Group Tag column. If it is blank or wrong, fix
@@ -62,6 +63,11 @@ device is enrolled via something other than Windows Autopilot (for example, an A
 corporate-owned device targeting `CaC-Devices-Child`), it has no Group Tag to match on and must be
 added to the relevant device group by hand instead, since Group Tag dynamic rules are a Windows
 Autopilot-only mechanism.
+
+Adult/teen local administrator rights are handled earlier in enrollment by the Windows Autopilot
+profile's **User account type = Administrator** setting, not by these dynamic device groups. If the
+joining adult/teen user is not a local admin immediately after Autopilot completes, check the
+assigned Autopilot deployment profile first; MDM policy sync is not the source of that permission.
 
 ### Stuck Intune app remediation
 

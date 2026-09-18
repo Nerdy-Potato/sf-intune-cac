@@ -4,11 +4,11 @@
     One-time bootstrap: converts CaC-Devices-Adult/Teen/Child from explicit to dynamic
     membership, keyed on each device's Windows Autopilot Group Tag.
 .DESCRIPTION
-    CaC-Devices-Adult/Teen/Child are the assignment targets for the local-admin and Windows LAPS
+    CaC-Devices-Adult/Teen/Child are the assignment targets for Windows LAPS and tier-specific
     Settings Catalog policies. They were created as ordinary assigned (explicit-membership)
     security groups, which meant nothing in the enrollment flow ever added a device to them - a
-    human had to remember to do it by hand, and when that step was missed (as happened for one
-    adult's device), the local-admin policy silently never applied.
+    human had to remember to do it by hand, and when that step was missed, those device-scoped
+    policies silently never applied.
 
     Microsoft Graph does not allow converting an existing group's membership type from assigned to
     dynamic (groupTypes is immutable after creation), so the only way to make membership
@@ -199,6 +199,6 @@ Next steps:
      already-registered device, use Set-CaCAutopilotGroupTag.ps1.
   2. Dynamic group processing is not instant - allow up to a few minutes to a few hours for large
      tenants, though a family-sized tenant is normally fast.
-  3. Re-run the deploy plan afterwards: the local-admin/LAPS policy assignments will show as
+  3. Re-run the deploy plan afterwards: the LAPS and tier-specific policy assignments will show as
      Update (re-pointing at the new group ids), not Create - this is expected and safe.
 '@

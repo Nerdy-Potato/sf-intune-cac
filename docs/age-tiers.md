@@ -58,7 +58,7 @@ device membership (`Get-CaCConfiguration` always reports an empty desired member
 
 That gap used to mean a human had to remember to add every newly enrolled device to its tier's
 device group by hand, and a missed step meant device-scoped policies assigned to that group (most
-importantly local-admin and Windows LAPS) silently never applied. These three groups are now
+importantly Windows LAPS and tier-specific restrictions) silently never applied. These three groups are now
 **dynamic groups**, keyed on each device's Windows Autopilot Group Tag (Entra's `OrderID` device
 physical id), so Entra ID maintains their membership itself - continuously, with no repository
 code, workflow, or schedule involved:
@@ -74,6 +74,11 @@ already has a Group Tag column - see [`enterprise-child-enrollment.md`](enterpri
 For a device that was registered without a tag, or needs to move tiers, run
 `scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` (or the **Set Autopilot Group Tag** workflow) to
 correct it after the fact; Entra re-evaluates group membership automatically once the tag changes.
+
+Local administrator rights for adults and teens are **not** granted by making an adult/teen group
+administrator on every device in the tier. For Windows Autopilot, the adult and teen deployment
+profiles use **User account type = Administrator**, which adds only the user joining that device to
+that device's local Administrators group. Child deployment remains standard-user.
 
 Group Tag dynamic rules are a **Windows Autopilot-only** mechanism. `CaC-Devices-Child` is also
 targeted by the Android corporate-owned enrollment restriction policy
