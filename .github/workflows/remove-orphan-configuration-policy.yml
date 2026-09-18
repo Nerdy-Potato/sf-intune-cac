@@ -1,0 +1,60 @@
+name: Remove orphan configuration policy
+
+on:
+  workflow_dispatch:
+    inputs:
+      display_name:
+        description: 'Exact Settings Catalog policy display name to delete'
+        type: string
+        required: true
+        default: 'SF Adults Local Admin'
+      confirm:
+        description: 'Explicitly confirm deletion of the named policy'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remove-orphan-configuration-policy
+  cancel-in-progress: false
+
+jobs:
+  remove:
+    name: Delete one orphaned Settings Catalog policy
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require explicit confirmation
+        shell: pwsh
+        run: |
+          if ('${{ inputs.confirm }}' -ne 'true') {
+            throw 'Orphan policy deletion requires confirm=true.'
+          }
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Delete orphaned Settings Catalog policy
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          ./scripts/bootstrap/Remove-CaCOrphanConfigurationPolicy.ps1 `
+            -DisplayName '${{ inputs.display_name }}' `
+            -Confirm:$false
