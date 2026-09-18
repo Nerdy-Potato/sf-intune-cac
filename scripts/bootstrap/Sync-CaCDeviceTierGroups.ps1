@@ -185,7 +185,7 @@ foreach ($device in $windowsDevices) {
     }
 }
 
-$results | Sort-Object -Property Status, Device | Format-Table -Property Device, Status, Reason -AutoSize
+$results | Sort-Object -Property Status, Device | Format-Table -Property Device, Status, Reason -AutoSize | Out-Host
 
 $summary = $results | Group-Object -Property Status | ForEach-Object { "$($_.Name): $($_.Count)" }
 Write-Host ''
