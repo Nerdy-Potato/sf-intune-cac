@@ -527,6 +527,8 @@ Describe 'Workflow trigger and permission safety' {
         $script:AutopilotInventoryWorkflow | Should -Match 'Get-CaCAutopilotDeploymentProfileInventory\.ps1'
         $script:AutopilotInventoryBootstrap | Should -Match 'Connect-CaCGraph\s+-TenantId\s+\$TenantId\s+-ClientId\s+\$ClientId\s+-ReadOnly'
         $script:AutopilotInventoryBootstrap | Should -Match 'windowsAutopilotDeploymentProfiles'
+        $script:AutopilotInventoryBootstrap | Should -Match 'deviceManagement/configurationPolicies'
+        $script:AutopilotInventoryBootstrap | Should -Match 'autopilot\|devicepreparation\|dpp'
         $script:AutopilotInventoryBootstrap | Should -Match 'userType'
     }
 }
