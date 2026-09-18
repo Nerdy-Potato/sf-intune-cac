@@ -3,8 +3,15 @@
   "comment": [
     "Assignment groups. Membership is calculated from config/identity/users.json so that the",
     "tier a person sits in is the only thing anyone has to edit when a child gets older.",
-    "Groups are assigned (static) rather than dynamic: dynamic rules would need attributes we",
-    "deliberately do not store (age / date of birth), and static membership is far easier to review."
+    "Tier groups (sg-tier-*) are assigned (static) rather than dynamic: dynamic rules would need",
+    "attributes we deliberately do not store (age / date of birth), and static membership is far",
+    "easier to review.",
+    "2026-09-18: The 3 device groups (sg-devices-adult/teen/child) were converted from assigned to",
+    "dynamic membership, keyed on each device's Windows Autopilot Group Tag - see",
+    "scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1 and docs/age-tiers.md. This repo's",
+    "plan/apply engine still never manages their membership directly (memberType: device groups",
+    "always resolve to an empty desired member list and NoChange), because Entra now maintains",
+    "membership itself; the 'membership' block below is retained only for schema shape."
   ],
   "groups": [
     {
@@ -35,7 +42,7 @@
       "id": "sg-devices-adult",
       "displayName": "CaC-Devices-Adult",
       "mailNickname": "cac-devices-adult",
-      "description": "Device group corresponding to the adult tier. Membership is added automatically by the Sync device tier groups workflow, based on each device's primary user tier.",
+      "description": "Device group corresponding to the adult tier. Dynamic membership rule (managed outside this repo's plan/apply engine): devices Autopilot-registered with Group Tag 'CaC-Adult' are added by Entra ID automatically. See docs/age-tiers.md.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
@@ -44,7 +51,7 @@
       "id": "sg-devices-teen",
       "displayName": "CaC-Devices-Teen",
       "mailNickname": "cac-devices-teen",
-      "description": "Device group corresponding to the teen tier. Membership is added automatically by the Sync device tier groups workflow, based on each device's primary user tier.",
+      "description": "Device group corresponding to the teen tier. Dynamic membership rule (managed outside this repo's plan/apply engine): devices Autopilot-registered with Group Tag 'CaC-Teen' are added by Entra ID automatically. See docs/age-tiers.md.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
@@ -53,7 +60,7 @@
       "id": "sg-devices-child",
       "displayName": "CaC-Devices-Child",
       "mailNickname": "cac-devices-child",
-      "description": "Device group corresponding to the child tier. Membership is added automatically by the Sync device tier groups workflow, based on each device's primary user tier.",
+      "description": "Device group corresponding to the child tier. Dynamic membership rule (managed outside this repo's plan/apply engine): Windows devices Autopilot-registered with Group Tag 'CaC-Child' are added by Entra ID automatically. Android child devices are still added manually (see docs/age-tiers.md); Group Tag dynamic rules are a Windows Autopilot-only mechanism.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }

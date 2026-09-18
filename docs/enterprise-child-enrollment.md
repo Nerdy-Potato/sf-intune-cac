@@ -28,6 +28,15 @@ not turn an arbitrary BYOD enrollment into a corporate device. Before a device i
    themselves (one pointed at each of the three groups) must still be created manually in the Intune
    portal.
 
+   Separately, and regardless of whether a Device Preparation policy is configured: **set the
+   device's Windows Autopilot Group Tag to `CaC-Adult`, `CaC-Teen`, or `CaC-Child`** at hardware
+   hash registration time (the CSV/portal import has a Group Tag column). This is what the
+   `CaC-Devices-Adult`/`-Teen`/`-Child` dynamic groups match on, and those groups are what the
+   local-admin and Windows LAPS policies are assigned to - see [`age-tiers.md`](age-tiers.md). A
+   device registered without the tag, or with the wrong one, will not receive those policies until
+   the tag is corrected with `scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` (or the **Set
+   Autopilot Group Tag** GitHub Actions workflow).
+
 Enrollment tokens, Apple server tokens, and Windows hardware hashes are tenant/device secrets and
 are deliberately not stored in this public repository.
 

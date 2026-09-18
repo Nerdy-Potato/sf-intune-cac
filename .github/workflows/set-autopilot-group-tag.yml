@@ -1,22 +1,31 @@
-name: Sync device tier groups
+name: Set Autopilot Group Tag
 
 on:
-  schedule:
-    # Every 4 hours - catches a newly enrolled device within a few hours instead of relying on
-    # somebody remembering to add it to CaC-Devices-Adult/Teen/Child by hand.
-    - cron: '15 */4 * * *'
   workflow_dispatch:
+    inputs:
+      serial_number:
+        description: 'Windows Autopilot device serial number'
+        type: string
+        required: true
+      tier:
+        description: 'Tier to tag the device for'
+        type: choice
+        required: true
+        options:
+          - adult
+          - teen
+          - child
 
 permissions:
   contents: read
 
 concurrency:
-  group: sync-device-tier-groups
+  group: set-autopilot-group-tag
   cancel-in-progress: false
 
 jobs:
-  sync:
-    name: Add enrolled Windows devices to their primary user's tier device group
+  tag:
+    name: Set Windows Autopilot Group Tag on a device
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -35,7 +44,7 @@ jobs:
             throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
           }
 
-      - name: Sync device tier group membership
+      - name: Set Group Tag
         shell: pwsh
         env:
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -43,4 +52,4 @@ jobs:
         run: |
           # -Confirm:$false disables the interactive ShouldProcess prompt, which has no
           # interactive host to attach to on the runner and throws a null-reference error.
-          ./scripts/bootstrap/Sync-CaCDeviceTierGroups.ps1 -Confirm:$false
+          ./scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1 -SerialNumber '${{ inputs.serial_number }}' -Tier '${{ inputs.tier }}' -Confirm:$false

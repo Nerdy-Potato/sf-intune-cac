@@ -51,17 +51,38 @@ The child tier also owns an explicit app catalog. Defender, authentication, and 
 a reviewed change to `config/apps/approved-child-apps.json`.
 
 Each tier also has a corresponding device group: `CaC-Devices-Adult`, `CaC-Devices-Teen`, and
-`CaC-Devices-Child`. The repository creates these groups, but the normal plan/apply reconciliation
-loop deliberately never manages their device membership (`Get-CaCConfiguration` always reports an
-empty desired member list for a `memberType: device` group) - config-as-code has no signal for
-*which physical device* belongs to *which person*.
+`CaC-Devices-Child`. The normal plan/apply reconciliation loop deliberately never manages their
+device membership (`Get-CaCConfiguration` always reports an empty desired member list for a
+`memberType: device` group) - config-as-code has no signal for *which physical device* belongs to
+*which person*.
 
 That gap used to mean a human had to remember to add every newly enrolled device to its tier's
 device group by hand, and a missed step meant device-scoped policies assigned to that group (most
-importantly local-admin and Windows LAPS) silently never applied. The **Sync device tier groups**
-workflow (`.github/workflows/sync-device-tier-groups.yml`, backed by
-`scripts/bootstrap/Sync-CaCDeviceTierGroups.ps1`) now closes that gap on its own schedule: it reads
-each enrolled Windows device's primary user, looks up that user's tier from
-`config/identity/users.json`, and adds the device to the matching group if it is not already a
-member. It only adds - if a device ends up in the wrong tier's group (for example, after a birthday
-moves someone up a tier) it is reported as a conflict for manual review, never auto-removed.
+importantly local-admin and Windows LAPS) silently never applied. These three groups are now
+**dynamic groups**, keyed on each device's Windows Autopilot Group Tag (Entra's `OrderID` device
+physical id), so Entra ID maintains their membership itself - continuously, with no repository
+code, workflow, or schedule involved:
+
+| Tier  | Group              | Required Windows Autopilot Group Tag |
+| ----- | ------------------ | ------------------------------------- |
+| Adult | `CaC-Devices-Adult` | `CaC-Adult` |
+| Teen  | `CaC-Devices-Teen`  | `CaC-Teen`  |
+| Child | `CaC-Devices-Child` | `CaC-Child` |
+
+Set the Group Tag when a device is hardware-hash registered with Autopilot (the CSV/portal import
+already has a Group Tag column - see [`enterprise-child-enrollment.md`](enterprise-child-enrollment.md)).
+For a device that was registered without a tag, or needs to move tiers, run
+`scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` (or the **Set Autopilot Group Tag** workflow) to
+correct it after the fact; Entra re-evaluates group membership automatically once the tag changes.
+
+Group Tag dynamic rules are a **Windows Autopilot-only** mechanism. `CaC-Devices-Child` is also
+targeted by the Android corporate-owned enrollment restriction policy
+(`android-fully-managed-restrictions-child.json`), and Android devices have no Autopilot Group
+Tag to match on - those still need to be added to `CaC-Devices-Child` by hand in the portal after
+enrollment.
+
+These three groups were migrated from assigned (explicit-membership) to dynamic groups by a
+one-time bootstrap operation, because Graph does not allow converting an existing group's
+membership type in place - see `scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1` for
+the mechanics and rollback caveats if this ever needs to be redone (for example, in a fresh
+tenant).

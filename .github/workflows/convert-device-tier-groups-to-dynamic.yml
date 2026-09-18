@@ -1,0 +1,72 @@
+name: Convert device tier groups to dynamic
+
+on:
+  workflow_dispatch:
+    inputs:
+      tiers:
+        description: 'Comma-separated tiers to convert (adult, teen, child)'
+        type: string
+        required: true
+        default: 'adult,teen,child'
+      confirm:
+        description: 'Explicitly confirm deleting and recreating the listed device group(s)'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: convert-device-tier-groups-to-dynamic
+  cancel-in-progress: false
+
+jobs:
+  convert:
+    name: Delete and recreate CaC-Devices-<Tier> as dynamic groups
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require explicit confirmation
+        shell: pwsh
+        run: |
+          if ('${{ inputs.confirm }}' -ne 'true') {
+            throw 'This is a one-time, disruptive operation (it deletes the existing device group(s)). Requires confirm=true.'
+          }
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Convert device tier group(s) to dynamic
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          $tiers = @(
+            '${{ inputs.tiers }}'.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries) |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+
+          if (-not $tiers) {
+            throw 'No tiers were provided. Pass a comma-separated tiers input (adult, teen, child).'
+          }
+
+          # -Confirm:$false disables the interactive ShouldProcess prompt, which has no
+          # interactive host to attach to on the runner and throws a null-reference error.
+          # The "Require explicit confirmation" step above (gated on inputs.confirm) is the
+          # real authorization gate for this solo-maintainer, one-time migration workflow.
+          ./scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1 -Tier $tiers -Confirm:$false
