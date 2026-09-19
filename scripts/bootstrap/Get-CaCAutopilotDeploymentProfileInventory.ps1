@@ -109,6 +109,8 @@ $classicResults = foreach ($profile in $profiles) {
         DeviceUsageType   = Get-LocalObjectProperty -InputObject $oobe -Name 'deviceUsageType'
         TemplateId        = $null
         RawAccountSetting = $null
+        Priority          = $null
+        Assignments       = $null
         LastModified      = Get-LocalObjectProperty -InputObject $profile -Name 'lastModifiedDateTime'
     }
 }
@@ -123,9 +125,24 @@ $devicePreparationPolicies = @($configurationPolicies | Where-Object {
         $templateDisplayName -match 'Autopilot|Device Preparation'
     })
 
+function Get-AssignmentTargetSummary {
+    param([Parameter()] $Assignments)
+
+    $summaries = foreach ($assignment in @($Assignments)) {
+        $target = Get-LocalObjectProperty -InputObject $assignment -Name 'target'
+        $odataType = Get-LocalObjectProperty -InputObject $target -Name '@odata.type'
+        $groupId = Get-LocalObjectProperty -InputObject $target -Name 'groupId'
+        if ($groupId) { "$odataType($groupId)" } else { $odataType }
+    }
+
+    return ($summaries -join '; ')
+}
+
 $devicePreparationResults = foreach ($policy in $devicePreparationPolicies) {
     $policyId = Get-LocalObjectProperty -InputObject $policy -Name 'id'
     $settings = Get-LocalGraphCollection -Uri "deviceManagement/configurationPolicies/$policyId/settings"
+    $fullPolicy = & $graphInvoker 'GET' "deviceManagement/configurationPolicies/$policyId" $null
+    $assignments = Get-LocalGraphCollection -Uri "deviceManagement/configurationPolicies/$policyId/assignments"
 
     $accountTypeSetting = $settings | Where-Object {
         $instance = Get-LocalObjectProperty -InputObject $_ -Name 'settingInstance'
@@ -152,6 +169,8 @@ $devicePreparationResults = foreach ($policy in $devicePreparationPolicies) {
         DeviceUsageType   = $null
         TemplateId        = Get-LocalObjectProperty -InputObject $templateReference -Name 'templateId'
         RawAccountSetting = $rawAccountSetting
+        Priority          = Get-LocalObjectProperty -InputObject $fullPolicy -Name 'priority'
+        Assignments       = Get-AssignmentTargetSummary -Assignments $assignments
         LastModified      = Get-LocalObjectProperty -InputObject $policy -Name 'lastModifiedDateTime'
     }
 }
