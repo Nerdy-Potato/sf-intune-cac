@@ -136,7 +136,9 @@ $devicePreparationResults = foreach ($policy in $devicePreparationPolicies) {
     $rawAccountSetting = Get-ChoiceSettingValue -Setting $accountTypeSetting
     $userType = switch -Regex ($rawAccountSetting) {
         'administrator|admin' { 'administrator'; break }
+        'accountype_0|accounttype_0' { 'administrator'; break }
         'standard' { 'standard'; break }
+        'accountype_1|accounttype_1' { 'standard'; break }
         default { $rawAccountSetting }
     }
 

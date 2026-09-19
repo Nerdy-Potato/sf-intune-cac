@@ -530,6 +530,8 @@ Describe 'Workflow trigger and permission safety' {
         $script:AutopilotInventoryBootstrap | Should -Match 'deviceManagement/configurationPolicies'
         $script:AutopilotInventoryBootstrap | Should -Match 'autopilot\|devicepreparation\|dpp'
         $script:AutopilotInventoryBootstrap | Should -Match 'userType'
+        $script:AutopilotInventoryBootstrap | Should -Match 'accountype_0\|accounttype_0'
+        $script:AutopilotInventoryBootstrap | Should -Match 'accountype_1\|accounttype_1'
     }
 }
 
