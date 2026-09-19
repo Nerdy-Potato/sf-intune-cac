@@ -836,3 +836,162 @@ Describe 'Device tier group dynamic membership' {
         $postCall.Body.groupTag | Should -Be 'CaC-Adult'
     }
 }
+
+Describe 'Enrolling-user local admin remediation' {
+    BeforeAll {
+        $script:DetectScript = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/remediation/Detect-CaCEnrollingUserLocalAdmin.ps1') -Raw
+        $script:RemediateScript = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/remediation/Remediate-CaCEnrollingUserLocalAdmin.ps1') -Raw
+        $script:RemediationBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1') -Raw
+        $script:RemediationWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/deploy-local-admin-remediation.yml') -Raw
+    }
+
+    It 'reads the enrolling user UPN from the MS DM Server enrollment registry key in both on-device scripts' {
+        foreach ($content in @($script:DetectScript, $script:RemediateScript)) {
+            $content | Should -Match 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments'
+            $content | Should -Match "ProviderID\s+-ne\s+'MS DM Server'"
+        }
+    }
+
+    It 'resolves the enrolling user as an AzureAD-prefixed local security principal' {
+        $script:DetectScript | Should -Match 'AzureAD\\\$upn'
+        $script:DetectScript | Should -Match 'NTAccount'
+        $script:RemediateScript | Should -Match 'AzureAD\\\$upn'
+    }
+
+    It 'exits 0 from detection when the enrolling user is already a local administrator, 1 otherwise' {
+        $script:DetectScript | Should -Match '(?s)is already a local administrator.*?exit 0'
+        $script:DetectScript | Should -Match '(?s)is not a local administrator.*?exit 1'
+    }
+
+    It 'falls back to net localgroup when Add-LocalGroupMember fails in the remediation script' {
+        $script:RemediateScript | Should -Match 'Add-LocalGroupMember\s+-Group\s+''Administrators'''
+        $script:RemediateScript | Should -Match 'net localgroup Administrators \$accountName /add'
+    }
+
+    It 'uses the module Graph auth pattern and requires the managed marker before updating an existing remediation script' {
+        $script:RemediationBootstrap | Should -Match 'CmdletBinding\(SupportsShouldProcess,\s*ConfirmImpact\s*=\s*''Medium'''
+        $script:RemediationBootstrap | Should -Match 'Connect-CaCGraph\s+-TenantId\s+\$TenantId\s+-ClientId\s+\$ClientId'
+        $script:RemediationBootstrap | Should -Match 'NewBoundScriptBlock'
+        $script:RemediationBootstrap | Should -Match 'deviceHealthScripts'
+        $script:RemediationBootstrap | Should -Match 'does not carry the repository managed marker'
+        $script:RemediationBootstrap | Should -Match 'ShouldProcess'
+    }
+
+    It 'base64-encodes both on-device scripts and never assigns the Child tier' {
+        $script:RemediationBootstrap | Should -Match 'detectionScriptContent'
+        $script:RemediationBootstrap | Should -Match 'remediationScriptContent'
+        $script:RemediationBootstrap | Should -Match 'ToBase64String'
+        $script:RemediationBootstrap | Should -Match "ValidateSet\('adult',\s*'teen'\)"
+        $script:RemediationBootstrap | Should -Not -Match "'child'"
+    }
+
+    It 'gates the deployment workflow behind the production environment' {
+        $script:RemediationWorkflow | Should -Match 'workflow_dispatch:'
+        $script:RemediationWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
+        $script:RemediationWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
+        $script:RemediationWorkflow | Should -Match 'New-CaCLocalAdminRemediationScript\.ps1'
+    }
+
+    It 'creates a new proactive remediation and assigns it with an hourly schedule when none exists' {
+        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1'
+        $capturedCalls = [System.Collections.Generic.List[object]]::new()
+
+        Mock -CommandName Import-Module {}
+        Mock -CommandName Connect-CaCGraph {}
+        Mock -CommandName Get-Module {
+            $fakeModule = [pscustomobject]@{}
+            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
+                param([scriptblock] $ScriptBlock)
+                $ScriptBlock
+            } -Force -PassThru
+        }
+
+        function Invoke-CaCGraphRequest {
+            param(
+                [string] $Method,
+                [string] $Uri,
+                $Body
+            )
+
+            $capturedCalls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body }) | Out-Null
+
+            if ($Method -eq 'GET' -and $Uri -match "^deviceManagement/deviceHealthScripts\?\`$filter=") {
+                return [pscustomobject]@{ value = @() }
+            }
+
+            if ($Method -eq 'POST' -and $Uri -eq 'deviceManagement/deviceHealthScripts') {
+                return [pscustomobject]@{ id = 'script-id'; displayName = $Body.displayName }
+            }
+
+            if ($Method -eq 'GET' -and $Uri -match "^groups\?\`$filter=([^&]+)&") {
+                $filter = [System.Uri]::UnescapeDataString($Matches[1])
+                if ($filter -eq "displayName eq 'CaC-Devices-Adult'") {
+                    return [pscustomobject]@{ value = @([pscustomobject]@{ id = 'adult-group-id'; displayName = 'CaC-Devices-Adult' }) }
+                }
+                if ($filter -eq "displayName eq 'CaC-Devices-Teen'") {
+                    return [pscustomobject]@{ value = @([pscustomobject]@{ id = 'teen-group-id'; displayName = 'CaC-Devices-Teen' }) }
+                }
+                throw "Unexpected group filter: $filter"
+            }
+
+            if ($Method -eq 'POST' -and $Uri -eq 'deviceManagement/deviceHealthScripts/script-id/assign') {
+                return $null
+            }
+
+            throw "Unexpected Graph call: $Method $Uri"
+        }
+
+        & $scriptPath -Tier 'adult', 'teen' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false | Out-Null
+
+        $createCall = $capturedCalls | Where-Object { $_.Method -eq 'POST' -and $_.Uri -eq 'deviceManagement/deviceHealthScripts' }
+        $createCall | Should -HaveCount 1
+        $createCall.Body.displayName | Should -Be 'CaC - Enrolling User Local Admin'
+        $createCall.Body.detectionScriptContent | Should -Not -BeNullOrEmpty
+        $createCall.Body.remediationScriptContent | Should -Not -BeNullOrEmpty
+
+        $assignCall = $capturedCalls | Where-Object { $_.Method -eq 'POST' -and $_.Uri -eq 'deviceManagement/deviceHealthScripts/script-id/assign' }
+        $assignCall | Should -HaveCount 1
+        $assignCall.Body.deviceHealthScriptAssignments | Should -HaveCount 2
+        ($assignCall.Body.deviceHealthScriptAssignments.target.groupId) | Should -Contain 'adult-group-id'
+        ($assignCall.Body.deviceHealthScriptAssignments.target.groupId) | Should -Contain 'teen-group-id'
+        ($assignCall.Body.deviceHealthScriptAssignments | ForEach-Object { $_.runSchedule.'@odata.type' }) |
+            Should -Contain '#microsoft.graph.deviceHealthScriptHourlySchedule'
+    }
+
+    It 'refuses to update an existing proactive remediation that does not carry the managed marker' {
+        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1'
+
+        Mock -CommandName Import-Module {}
+        Mock -CommandName Connect-CaCGraph {}
+        Mock -CommandName Get-Module {
+            $fakeModule = [pscustomobject]@{}
+            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
+                param([scriptblock] $ScriptBlock)
+                $ScriptBlock
+            } -Force -PassThru
+        }
+
+        function Invoke-CaCGraphRequest {
+            param(
+                [string] $Method,
+                [string] $Uri,
+                $Body
+            )
+
+            if ($Method -eq 'GET' -and $Uri -match "^deviceManagement/deviceHealthScripts\?\`$filter=") {
+                return [pscustomobject]@{
+                    value = @([pscustomobject]@{
+                            id          = 'existing-id'
+                            displayName = 'CaC - Enrolling User Local Admin'
+                            description = 'Hand-created in the portal, not by this repository.'
+                        })
+                }
+            }
+
+            throw "Unexpected Graph call: $Method $Uri"
+        }
+
+        { & $scriptPath -Tier 'adult' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false } |
+            Should -Throw '*does not carry the repository managed marker*'
+    }
+}

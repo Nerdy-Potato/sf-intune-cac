@@ -1,0 +1,61 @@
+name: Deploy local admin remediation
+
+on:
+  workflow_dispatch:
+    inputs:
+      tiers:
+        description: 'Comma-separated tiers to assign this remediation to (adult, teen)'
+        type: string
+        required: true
+        default: 'adult,teen'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-local-admin-remediation
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Create/update and assign the enrolling-user local admin proactive remediation
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Deploy proactive remediation
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          $tiers = @(
+            '${{ inputs.tiers }}'.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries) |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          )
+
+          if (-not $tiers) {
+            throw 'No tiers were provided. Pass a comma-separated tiers input (adult, teen).'
+          }
+
+          # -Confirm:$false disables the interactive ShouldProcess prompt, which has no
+          # interactive host to attach to on the runner and throws a null-reference error.
+          # This operation is idempotent (create-or-update-in-place, full-replace assignment),
+          # so unlike the one-time group conversion workflow no separate confirm gate is needed -
+          # the `production` environment's approval gate is the authorization control here.
+          ./scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1 -Tier $tiers -Confirm:$false
