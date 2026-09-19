@@ -532,6 +532,8 @@ Describe 'Workflow trigger and permission safety' {
         $script:AutopilotInventoryBootstrap | Should -Match 'userType'
         $script:AutopilotInventoryBootstrap | Should -Match 'accountype_0\|accounttype_0'
         $script:AutopilotInventoryBootstrap | Should -Match 'accountype_1\|accounttype_1'
+        $script:AutopilotInventoryBootstrap | Should -Match 'assignments'
+        $script:AutopilotInventoryBootstrap | Should -Match 'priority'
     }
 }
 
