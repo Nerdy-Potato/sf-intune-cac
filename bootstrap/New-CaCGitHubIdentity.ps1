@@ -82,6 +82,7 @@ $applications = @(
             'DeviceManagementConfiguration.Read.All'
             'DeviceManagementApps.Read.All'
             'DeviceManagementServiceConfig.Read.All'
+            'DeviceManagementScripts.Read.All'
             'Group.Read.All'
             'User.Read.All'
         )
@@ -99,6 +100,7 @@ $applications = @(
             'DeviceManagementConfiguration.ReadWrite.All'
             'DeviceManagementApps.ReadWrite.All'
             'DeviceManagementServiceConfig.ReadWrite.All'
+            'DeviceManagementScripts.ReadWrite.All'
             'Group.ReadWrite.All'
             'User.Read.All'
         )
