@@ -308,5 +308,9 @@ function Test-CaCConfiguration {
         }
     }
 
+    foreach ($finding in @(Test-CaCChildAndroidProtection -Configuration $Configuration)) {
+        $findings.Add($finding)
+    }
+
     return $findings.ToArray()
 }

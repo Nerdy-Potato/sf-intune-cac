@@ -71,6 +71,32 @@ function Get-CaCPayloadDrift {
 
         $desiredValue = $Desired[$name]
 
+        if ($name -eq 'omaSettings') {
+            $actualSettings = @(Get-CaCProperty -InputObject $Actual -Name $name)
+            if (@($desiredValue).Count -ne $actualSettings.Count) {
+                $drift.Add('omaSettings: <setting count differs>')
+            }
+            foreach ($setting in $desiredValue) {
+                $uri = Get-CaCProperty $setting 'omaUri'
+                $matches = @($actualSettings | Where-Object { (Get-CaCProperty $_ 'omaUri') -eq $uri })
+                if ($matches.Count -ne 1 -or
+                    (Get-CaCProperty $setting '@odata.type') -ne (Get-CaCProperty $matches[0] '@odata.type')) {
+                    $drift.Add("omaSettings: $uri <missing, duplicate, or different type>")
+                    continue
+                }
+                if ((Get-CaCProperty $matches[0] 'isEncrypted') -eq $true) {
+                    Write-Warning "Cannot verify encrypted OMA setting '$uri' from Graph's masked response; verify its effective value on the device."
+                    continue
+                }
+                $desiredJson = ConvertTo-Json -InputObject (Get-CaCProperty $setting 'value') -Compress -Depth 25
+                $actualJson = ConvertTo-Json -InputObject (Get-CaCProperty $matches[0] 'value') -Compress -Depth 25
+                if ($desiredJson -cne $actualJson) {
+                    $drift.Add("omaSettings: $uri <value differs>")
+                }
+            }
+            continue
+        }
+
         if ($name -eq 'settings' -and $desiredValue -is [System.Collections.IEnumerable] -and $desiredValue -isnot [string]) {
             $actualValue = Get-CaCProperty -InputObject $Actual -Name $name
             $desiredJson = (ConvertTo-CaCSettingsComparable -Value @($desiredValue) | ConvertTo-Json -Depth 50 -Compress)

@@ -193,6 +193,29 @@ Describe 'Get-CaCResourceMap' {
 }
 
 Describe 'Get-CaCPayloadDrift' {
+    It 'compares custom OMA values and types without logging their contents' {
+        InModuleScope IntuneCaC {
+            $desired = @{ omaSettings = @(@{ omaUri = './Device/Test'; '@odata.type' = '#microsoft.graph.omaSettingInteger'; value = 1 }) }
+            $actual = @{ omaSettings = @(@{ omaUri = './Device/Test'; '@odata.type' = '#microsoft.graph.omaSettingInteger'; value = 0 }) }
+            @(Get-CaCPayloadDrift $desired $actual) | Should -Be @('omaSettings: ./Device/Test <value differs>')
+            $actual.omaSettings[0].value = 1
+            Get-CaCPayloadDrift $desired $actual | Should -BeNullOrEmpty
+            $actual.omaSettings[0].'@odata.type' = '#microsoft.graph.omaSettingString'
+            @(Get-CaCPayloadDrift $desired $actual) | Should -Be @('omaSettings: ./Device/Test <missing, duplicate, or different type>')
+        }
+    }
+
+    It 'warns when masked OMA settings cannot be verified instead of reporting invented value drift' {
+        InModuleScope IntuneCaC {
+            $desired = @{ omaSettings = @(@{ omaUri = './Device/Test'; '@odata.type' = '#microsoft.graph.omaSettingString'; value = 'example' }) }
+            $actual = @{ omaSettings = @(@{ omaUri = './Device/Test'; '@odata.type' = '#microsoft.graph.omaSettingString'; value = '****'; isEncrypted = $true }) }
+            $warnings = @()
+            Get-CaCPayloadDrift $desired $actual -WarningVariable warnings -WarningAction SilentlyContinue | Should -BeNullOrEmpty
+            $warnings.Count | Should -Be 1
+            [string] $warnings[0] | Should -Match 'Cannot verify encrypted OMA setting'
+        }
+    }
+
     It 'ignores server-generated Settings Catalog metadata when comparing settings trees' {
         InModuleScope IntuneCaC {
             $desired = @{
@@ -237,6 +260,43 @@ Describe 'Get-CaCPayloadDrift' {
 }
 
 Describe 'New-CaCPlan' {
+    It 'repairs disabled GSA values through a reviewed plan and remains enabled on repeated plan/apply' {
+        $state = New-FakeTenant -InSync
+        $gsa = $state.Policies.mobileAppConfigurations | Where-Object displayName -EQ 'CaC - Android - Defender and GSA (Child)'
+        $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($gsa.payloadJson)) | ConvertFrom-Json
+        foreach ($setting in $decoded.managedProperty) { $setting.valueString = '0' }
+        $gsa.payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($decoded | ConvertTo-Json -Depth 10 -Compress)))
+        $readInvoker = New-FakeInvoker $state
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $readInvoker
+        $updates = @($plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'Update' -and $_.Target -eq $gsa.displayName })
+        $updates.Count | Should -Be 1
+        $roundTripped = @($plan | ConvertTo-Json -Depth 50 | ConvertFrom-Json)
+        $writer = {
+            param($Method, $Uri, $Body)
+            if ($Method -eq 'PATCH' -and $Uri -eq "deviceAppManagement/mobileAppConfigurations/$($gsa.id)") {
+                $gsa.payloadJson = $Body.payloadJson
+            }
+            & $readInvoker $Method $Uri $Body
+        }.GetNewClosure()
+        $results = Invoke-CaCPlan -Plan $roundTripped -Configuration $script:Config -GraphInvoker $writer -Confirm:$false
+        @($results | Where-Object Status -EQ 'Failed') | Should -BeNullOrEmpty
+        $applied = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($gsa.payloadJson)) | ConvertFrom-Json
+        $applied.managedProperty.valueString | Should -Be @('3', '3')
+        $second = New-CaCPlan -Configuration $script:Config -GraphInvoker $readInvoker
+        @($second | Where-Object { $_.Target -eq $gsa.displayName -and $_.Action -ne 'NoChange' }) | Should -BeNullOrEmpty
+        $before = @($state.Calls | Where-Object Method -NE 'GET').Count
+        $null = Invoke-CaCPlan -Plan $second -Configuration $script:Config -GraphInvoker $writer -Confirm:$false
+        @($state.Calls | Where-Object Method -NE 'GET').Count | Should -Be $before
+    }
+
+    It 'plans a modern LAPS update when backup CSP settings are missing, not just when the description changes' {
+        $state = New-FakeTenant -InSync
+        $laps = $state.Policies.deviceConfigurations | Where-Object displayName -EQ 'CaC - Windows LAPS - Account Management'
+        $laps.omaSettings = @($laps.omaSettings | Where-Object omaUri -NotLike '*/BackupDirectory')
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+        @($plan | Where-Object { $_.Target -eq $laps.displayName -and $_.Action -eq 'Update' }).Count | Should -Be 1
+    }
+
     Context 'against an empty tenant' {
         BeforeAll {
             $script:EmptyState = New-FakeTenant

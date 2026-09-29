@@ -30,15 +30,15 @@ not turn an arbitrary BYOD enrollment into a corporate device. Before a device i
    themselves (one pointed at each of the three groups) must still be created manually in the Intune
    portal.
 
-   Separately, and regardless of whether a Device Preparation policy is configured: **set the
-   device's Windows Autopilot Group Tag to `CaC-Adult`, `CaC-Teen`, or `CaC-Child`** at hardware
-   hash registration time (the CSV/portal import has a Group Tag column). This is what the
-   `CaC-Devices-Adult`/`-Teen`/`-Child` dynamic groups match on, and those groups are what the
-   Windows LAPS and tier-specific device policies are assigned to - see [`age-tiers.md`](age-tiers.md). A
-   device registered without the tag, or with the wrong one, will not receive those policies until
-   the tag is corrected with `scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` (or the **Set
-   Autopilot Group Tag** GitHub Actions workflow).
-
+   Separately, and regardless of whether a Device Preparation policy is configured: **set the Entra
+   device object's `extensionAttribute1` to `Adult`, `Teen`, or `Child`** once the device has
+   enrolled and its Entra device object exists. That attribute is what the
+   `CaC-Devices-Adult`/`-Teen`/`-Child` dynamic groups match on, and those groups are what Windows
+   LAPS and the tier-specific device policies are assigned to - see [`age-tiers.md`](age-tiers.md).
+   A device that is never tagged, or is tagged with the wrong tier, does not receive those policies.
+   Tag it with `scripts/bootstrap/Set-CaCDeviceTierTag.ps1` (or the **Set Entra device tier tag**
+   GitHub Actions workflow), supplying the exact Entra device object ID. This applies to Android
+   corporate-owned child devices too; the attribute rule has no Windows-only restriction.
 Enrollment tokens, Apple server tokens, and Windows hardware hashes are tenant/device secrets and
 are deliberately not stored in this public repository.
 
@@ -67,6 +67,26 @@ other app's traffic through the tunnel. `android-fully-managed-restrictions-chil
 `vpnAlwaysOnPackageIdentifier` to the Defender package (`com.microsoft.scmx`) with
 `vpnAlwaysOnLockdownMode: true`, so the device has no network connectivity at all unless the GSA
 tunnel is connected - closing the gap where another app could bypass Global Secure Access entirely.
+Both values are the string `3`; the base64 `payloadJson` is the encoding of the decoded example in
+that file's `comment`, and the two must always agree.
+
+Check that from the tenant with the **Inventory Intune apps** workflow, which runs
+`scripts/bootstrap/Get-CaCAppInventory.ps1 -IncludeChildGsa` under the read-only plan identity
+(every request is a `GET`). It decodes and reports both live GSA values, the child user- and
+device-group include flags with their member counts, the exclusion count, how many competing
+Defender app configurations exist, and the aggregate reported `deviceStatuses` - no device, user, or
+tenant identifiers. It warns when either value is not forced on, and when more than one Defender app
+configuration exists to overlap. Run it before deployment to capture the starting state and again
+afterwards to confirm the change landed. See [operations.md](operations.md) for what it does and
+does not prove.
+
+Defender and that app configuration are assigned to **both** `CaC-Tier-Child` and
+`CaC-Devices-Child`. The user-tier assignment expresses intent; the device-group assignment keeps a
+corporate-owned child device covered even when the person signing in on it is in a different tier
+(for example, a device still tagged `Child` used by somebody the config records as `teen`). Tagging
+a device does not change anybody's user tier, and moving a user between tiers does not retag their
+device. The Android corporate-owned restrictions, including the `com.microsoft.scmx` always-on VPN
+lockdown, remain targeted at the device group.
 
 On iOS/iPadOS, Defender is required and the on-demand custom VPN profile uses the Defender bundle
 identifier, silently onboards, connects for all domains, disables split tunneling, and blocks user
@@ -83,24 +103,51 @@ as the traffic forwarding profile above. This repository does not create or vali
 ## Windows local admin and LAPS
 
 Adult and teen productivity accounts do not need Entra ID or other cloud administrator roles to be
-local administrators on the Windows devices they enroll. Local administrator membership is assigned
-by the Windows Autopilot deployment profile's **User account type = Administrator** setting, which
-adds the user joining the device to that device's local Administrators group. Do not use the built-in
-**Azure AD Joined Device Local Administrator** directory role for this; that role grants local admin
-on every Entra-joined device.
+local administrators on the Windows devices they enroll. Local administrator membership comes from
+two scoped enrollment-time settings, not from a policy assigned to a tier group and not from a
+remediation script:
 
-Child Windows deployment profiles must keep **User account type = Standard**. Children are not added
-to local Administrators.
+- The Windows Autopilot deployment profile (and Autopilot device preparation) **User account type =
+  Administrator**, which adds the user joining the device to that device's local Administrators
+  group. Child profiles must use **Standard**.
+- The Entra device-join setting *Local administrator settings > Registering users*, scoped to the
+  Adult and Teen user groups. The **Global administrator role is not** granted local administrator
+  on Entra-joined devices, and multifactor authentication is required to join a device.
 
-`CaC - Windows LAPS` configures Windows LAPS to rotate the password for the local administrator
-account named `x3nc0n`, but that setting alone does not create a custom local account in
-default/manual LAPS mode. The companion `CaC - Windows LAPS - Account Management` custom device
-configuration enables Windows LAPS Automatic Account Management using documented LAPS CSP OMA-URI
-nodes so supported devices create and manage the `x3nc0n` custom local administrator account
-automatically. Automatic Account Management requires Windows 11 24H2 or later (or Windows Server
-2025+); older Windows builds still need the account created by another supported mechanism before
-LAPS can manage its password. No local administrator password is stored in this repository.
+Do not use the built-in **Azure AD Joined Device Local Administrator** directory role for this; that
+role grants local admin on every Entra-joined device. Children are not added to local
+Administrators.
 
+`CaC - Windows LAPS - Account Management` is the single modern Windows LAPS policy. It uses
+documented LAPS CSP OMA-URI nodes to enable Automatic Account Management for the `x3nc0n` custom
+local administrator account and to set the password policy alongside it: backup directory Entra ID,
+password length 14, complexity 4, and a 30-day maximum password age. Legacy `ADMX_AdmPwd` policy
+roots are not inherited by the modern LAPS CSP, which is why those settings are restated here rather
+than split across two objects.
+
+`laps.json` still defines the legacy `ADMX_AdmPwd` Settings Catalog policy, deliberately and only as
+a transition. Do not add settings to it. Removing the file now would schedule an orphan deletion of
+the live legacy policy before the modern one is known to work, so it stays until the retirement
+below is complete.
+
+Automatic Account Management requires Windows 11 24H2 or later (or Windows Server 2025+) and Windows
+LAPS enabled in the tenant. Older builds do not create the account; do not assume creation
+succeeded. No local administrator password is stored, read, or logged by this repository - Windows
+LAPS generates and rotates the secret and backs it up to Entra ID.
+
+The plan compares these OMA settings against the tenant per OMA-URI, so a newly added node - such as
+`BackupDirectory` - shows up as drift and is actually deployed rather than silently skipped by a
+count-only comparison. One category is exempt: a setting marked `isEncrypted` is returned masked by
+Graph, so its value cannot be compared. The planner emits a warning for each encrypted node instead
+of claiming a match. Do not read that warning as either drift or agreement - verify the effective
+setting on an endpoint.
+
+Retire the legacy policy under an explicit and audited change, in this order: verify on a
+representative device that the modern policy has applied and that a password backup exists in Entra
+ID; confirm emergency access does not depend on the legacy configuration; then remove `laps.json` in
+a reviewed pull request and delete the exact live legacy policy through an explicitly approved
+deletion. Deleting it first would leave devices with no working LAPS configuration, and a normal
+deployment correctly refuses an unapproved delete.
 ### Known limitation: Android Private DNS
 
 Android's system-wide Private DNS (DNS-over-TLS) setting isn't exposed by Intune for Android

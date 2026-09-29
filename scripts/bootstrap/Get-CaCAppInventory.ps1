@@ -16,6 +16,8 @@
     Run this to see, for every current mobileApps object, whether its live type actually matches
     what config declares - so mismatches can be identified and deleted for CI to recreate correctly
     typed, instead of being missed indefinitely.
+    IncludeChildGsa also reports the two live GSA values, child assignment coverage and aggregate
+    device status counts without publishing device/user identifiers.
 .EXAMPLE
     ./scripts/bootstrap/Get-CaCAppInventory.ps1
 #>
@@ -25,7 +27,10 @@ param(
     [string] $TenantId = $env:AZURE_TENANT_ID,
 
     [Parameter()]
-    [string] $ClientId = $env:AZURE_CLIENT_ID
+    [string] $ClientId = $env:AZURE_CLIENT_ID,
+
+    [Parameter()]
+    [switch] $IncludeChildGsa
 )
 
 Set-StrictMode -Version Latest
@@ -41,7 +46,7 @@ if (-not $TenantId -or -not $ClientId) {
 $repoRoot = (Resolve-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath '../..')).Path
 Import-Module -Name (Join-Path $repoRoot 'src/IntuneCaC/IntuneCaC.psd1') -Force
 
-Connect-CaCGraph -TenantId $TenantId -ClientId $ClientId
+Connect-CaCGraph -TenantId $TenantId -ClientId $ClientId -ReadOnly
 
 $module = Get-Module -Name IntuneCaC
 if (-not $module) {
@@ -130,3 +135,69 @@ if ($mismatches) {
 Write-Host ''
 Write-Host '--- JSON (for scripted parsing) ---'
 $rows | Sort-Object DisplayName | ConvertTo-Json -Depth 4
+
+if ($IncludeChildGsa) {
+    $gsaConfig = $configuration.Policies | Where-Object name -EQ 'android-defender-gsa-child'
+    $remoteConfigurations = @((& $graphInvoker 'GET' 'deviceAppManagement/mobileAppConfigurations' $null).value |
+        Where-Object { $_ })
+    $matches = @($remoteConfigurations | Where-Object {
+        (& $getProperty $_ 'displayName') -eq $gsaConfig.payload.displayName
+    })
+    if ($matches.Count -ne 1) { throw 'Expected exactly one live child Defender/GSA app configuration.' }
+    $gsaId = & $getProperty $matches[0] 'id'
+    $gsa = & $graphInvoker 'GET' "deviceAppManagement/mobileAppConfigurations/$gsaId" $null
+    $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(
+        [string] (& $getProperty $gsa 'payloadJson'))) | ConvertFrom-Json -AsHashtable
+    $settings = foreach ($key in @('Global Secure Access', 'GlobalSecureAccessPrivateChannel')) {
+        $values = @($decoded.managedProperty | Where-Object key -CEQ $key)
+        [pscustomobject]@{
+            Key = $key
+            Value = @($values | ForEach-Object { & $getProperty $_ 'valueString' }) -join ','
+            ForcedOn = $values.Count -eq 1 -and (& $getProperty $values[0] 'valueString') -ceq '3'
+        }
+    }
+    $assignments = @((& $graphInvoker 'GET' "deviceAppManagement/mobileAppConfigurations/$gsaId/assignments" $null).value |
+        Where-Object { $_ })
+    $coverage = foreach ($groupKey in @('sg-tier-child', 'sg-devices-child')) {
+        $groupName = ($configuration.Groups | Where-Object id -EQ $groupKey).displayName
+        $encodedFilter = [uri]::EscapeDataString("displayName eq '$($groupName.Replace("'", "''"))'")
+        $groups = @((& $graphInvoker 'GET' "groups?`$filter=$encodedFilter" $null).value | Where-Object { $_ })
+        if ($groups.Count -ne 1) { throw "Expected exactly one '$groupName' assignment group." }
+        $groupId = & $getProperty $groups[0] 'id'
+        $included = @($assignments | Where-Object {
+            $target = & $getProperty $_ 'target'
+            (& $getProperty $target 'groupId') -eq $groupId -and
+            (& $getProperty $target '@odata.type') -eq '#microsoft.graph.groupAssignmentTarget'
+        }).Count -eq 1
+        $members = @((& $graphInvoker 'GET' "groups/$groupId/members" $null).value | Where-Object { $_ })
+        [pscustomobject]@{ Group = $groupName; Included = $included; MemberCount = $members.Count }
+    }
+    $statuses = @((& $graphInvoker 'GET' "deviceAppManagement/mobileAppConfigurations/$gsaId/deviceStatuses" $null).value |
+        Where-Object { $_ })
+    $statusCounts = @($statuses | Group-Object -Property { & $getProperty $_ 'status' } |
+        ForEach-Object { [pscustomobject]@{ Status = $_.Name; Count = $_.Count } })
+    $targetIds = @(& $getProperty $gsa 'targetedMobileApps')
+    $defenderPolicyCount = @($remoteConfigurations | Where-Object {
+        (& $getProperty $_ 'packageId') -in @('com.microsoft.scmx', 'app:com.microsoft.scmx') -or
+        @((& $getProperty $_ 'targetedMobileApps') | Where-Object { $_ -in $targetIds }).Count -gt 0
+    }).Count
+    Write-Host '--- Child Android GSA (read-only, no device/user identifiers) ---'
+    [pscustomobject]@{
+        Settings = @($settings)
+        PayloadShape = @($decoded.Keys)
+        ManagedPropertyKeys = @($decoded.managedProperty | ForEach-Object { & $getProperty $_ 'key' })
+        Assignments = @($coverage)
+        ExclusionCount = @($assignments | Where-Object {
+            (& $getProperty (& $getProperty $_ 'target') '@odata.type') -eq '#microsoft.graph.exclusionGroupAssignmentTarget'
+        }).Count
+        DefenderConfigurationCount = $defenderPolicyCount
+        ReportedDeviceStatuses = $statusCounts
+        Note = 'Assignment and reported status inventory only; confirm GSA and VPN lockdown on each device after sync.'
+    } | ConvertTo-Json -Depth 8
+    if (@($settings | Where-Object { -not $_.ForcedOn }).Count -gt 0) {
+        Write-Warning 'Live GSA is not forced on for both keys; deploy the reviewed configuration.'
+    }
+    if ($defenderPolicyCount -gt 1) {
+        Write-Warning 'Multiple Defender app configurations exist; review overlapping assignments for conflicts.'
+    }
+}

@@ -6,9 +6,10 @@
     "Tier groups (sg-tier-*) are assigned (static) rather than dynamic: dynamic rules would need",
     "attributes we deliberately do not store (age / date of birth), and static membership is far",
     "easier to review.",
-    "2026-09-18: The 3 device groups (sg-devices-adult/teen/child) were converted from assigned to",
-    "dynamic membership, keyed on each device's Windows Autopilot Group Tag - see",
-    "scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1 and docs/age-tiers.md. This repo's",
+    "The 3 device groups (sg-devices-adult/teen/child) use Entra dynamic membership keyed on",
+    "administrator-assigned device extensionAttribute1 (Adult, Teen, Child), including Android.",
+    "Use Set-CaCDeviceTierTag.ps1 for each new device and Convert-CaCDeviceTierGroupsToDynamic.ps1",
+    "to migrate the original assigned groups in place. This repo's",
     "plan/apply engine still never manages their membership directly (memberType: device groups",
     "always resolve to an empty desired member list and NoChange), because Entra now maintains",
     "membership itself; the 'membership' block below is retained only for schema shape."
@@ -42,7 +43,7 @@
       "id": "sg-devices-adult",
       "displayName": "CaC-Devices-Adult",
       "mailNickname": "cac-devices-adult",
-      "description": "Device group corresponding to the adult tier. Dynamic membership rule (managed outside this repo's plan/apply engine): devices Autopilot-registered with Group Tag 'CaC-Adult' are added by Entra ID automatically. See docs/age-tiers.md.",
+      "description": "Device group corresponding to the adult tier. Entra dynamic membership matches administrator-assigned device extensionAttribute1 'Adult' across platforms.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
@@ -51,7 +52,7 @@
       "id": "sg-devices-teen",
       "displayName": "CaC-Devices-Teen",
       "mailNickname": "cac-devices-teen",
-      "description": "Device group corresponding to the teen tier. Dynamic membership rule (managed outside this repo's plan/apply engine): devices Autopilot-registered with Group Tag 'CaC-Teen' are added by Entra ID automatically. See docs/age-tiers.md.",
+      "description": "Device group corresponding to the teen tier. Entra dynamic membership matches administrator-assigned device extensionAttribute1 'Teen' across platforms.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
@@ -60,7 +61,7 @@
       "id": "sg-devices-child",
       "displayName": "CaC-Devices-Child",
       "mailNickname": "cac-devices-child",
-      "description": "Device group corresponding to the child tier. Dynamic membership rule (managed outside this repo's plan/apply engine): Windows devices Autopilot-registered with Group Tag 'CaC-Child' are added by Entra ID automatically. Android child devices are still added manually (see docs/age-tiers.md); Group Tag dynamic rules are a Windows Autopilot-only mechanism.",
+      "description": "Device group corresponding to the child tier. Entra dynamic membership matches administrator-assigned device extensionAttribute1 'Child' across platforms, including Android.",
       "purpose": "assignment",
       "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
@@ -87,6 +88,7 @@
       "mailNickname": "cac-autopilot-device-preparation-child",
       "description": "Assigned device group populated by Windows Autopilot device preparation for child devices.",
       "purpose": "assignment",
+      "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
     },
     {
@@ -95,6 +97,7 @@
       "mailNickname": "cac-autopilot-device-preparation-adult",
       "description": "Assigned device group populated by Windows Autopilot device preparation for adult devices.",
       "purpose": "assignment",
+      "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
     },
     {
@@ -103,6 +106,7 @@
       "mailNickname": "cac-autopilot-device-preparation-teen",
       "description": "Assigned device group populated by Windows Autopilot device preparation for teen devices.",
       "purpose": "assignment",
+      "memberType": "device",
       "membership": { "source": "explicit", "values": [] }
     },
     {

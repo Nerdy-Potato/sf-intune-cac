@@ -46,7 +46,10 @@
         "appStoreUrl": "https://play.google.com/store/apps/details?id=com.microsoft.scmx",
         "minimumSupportedOperatingSystem": { "v8_0": true }
       },
-      "assignments": [{ "group": "sg-tier-child", "intent": "required" }]
+      "assignments": [
+        { "group": "sg-tier-child", "intent": "required" },
+        { "group": "sg-devices-child", "intent": "required" }
+      ]
     },
     {
       "id": "android-copilot",

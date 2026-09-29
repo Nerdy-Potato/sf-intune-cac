@@ -56,38 +56,72 @@ device membership (`Get-CaCConfiguration` always reports an empty desired member
 `memberType: device` group) - config-as-code has no signal for *which physical device* belongs to
 *which person*.
 
-That gap used to mean a human had to remember to add every newly enrolled device to its tier's
-device group by hand, and a missed step meant device-scoped policies assigned to that group (most
-importantly Windows LAPS and tier-specific restrictions) silently never applied. These three groups are now
-**dynamic groups**, keyed on each device's Windows Autopilot Group Tag (Entra's `OrderID` device
-physical id), so Entra ID maintains their membership itself - continuously, with no repository
-code, workflow, or schedule involved:
+These three groups are **dynamic groups**, keyed on the Entra device object's
+`extensionAttribute1`, which an administrator sets explicitly on each device:
 
-| Tier  | Group              | Required Windows Autopilot Group Tag |
-| ----- | ------------------ | ------------------------------------- |
-| Adult | `CaC-Devices-Adult` | `CaC-Adult` |
-| Teen  | `CaC-Devices-Teen`  | `CaC-Teen`  |
-| Child | `CaC-Devices-Child` | `CaC-Child` |
+| Tier  | Group               | Required `extensionAttribute1` | Membership rule |
+| ----- | ------------------- | ------------------------------ | --------------- |
+| Adult | `CaC-Devices-Adult` | `Adult` | `(device.extensionAttribute1 -eq "Adult")` |
+| Teen  | `CaC-Devices-Teen`  | `Teen`  | `(device.extensionAttribute1 -eq "Teen")` |
+| Child | `CaC-Devices-Child` | `Child` | `(device.extensionAttribute1 -eq "Child")` |
 
-Set the Group Tag when a device is hardware-hash registered with Autopilot (the CSV/portal import
-already has a Group Tag column - see [`enterprise-child-enrollment.md`](enterprise-child-enrollment.md)).
-For a device that was registered without a tag, or needs to move tiers, run
-`scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` (or the **Set Autopilot Group Tag** workflow) to
-correct it after the fact; Entra re-evaluates group membership automatically once the tag changes.
+The rules carry no operating system condition, so an Android corporate-owned child device is
+covered by exactly the same mechanism as a Windows one. That matters: `CaC-Devices-Child` is what
+the Android corporate-owned enrollment restriction and the Defender/Global Secure Access app
+configuration target.
+
+## Tagging a device
+
+Tagging is a manual, administrator-run step for **every** newly enrolled device. Nothing in this
+repository infers a device's tier from its enrolling user, and there is no enrollment-time hook that
+tags a device automatically:
+
+```powershell
+gh workflow run set-device-tier-tag.yml `
+  -f device_object_id='<entra-device-object-id>' `
+  -f tier='Child' `
+  -f confirm=true
+```
+
+(or run `scripts/bootstrap/Set-CaCDeviceTierTag.ps1` directly with Graph access.)
+
+The input is the **Entra device object ID** - not the Intune managed device ID, not `deviceId`, not
+a serial number, and not the user who signs in on it. The script refuses to overwrite a device that
+already carries a different tag unless `-AllowTierChange` (workflow input `allow_tier_change`) is
+passed, and it re-reads the device after the write to confirm the tag landed.
+
+Two consequences are worth stating plainly:
+
+- An untagged device is in no tier device group at all, so every device-scoped policy assigned to
+  those groups - Windows LAPS, the tier restrictions, the child Android restrictions, and the
+  Defender/GSA app configuration - simply never applies to it. Tag the device before assuming it is
+  protected.
+- Entra evaluates dynamic membership asynchronously. A successful tag write means the attribute is
+  set, not that the device is already a member. Check the group itself before relying on a policy.
+
+`extensionAttribute1` was confirmed empirically unused across the tenant's existing device objects
+before it was adopted for this, so tagging cannot collide with an existing use of the slot. That
+stays true by enforcement, not by assumption: if a device's `extensionAttribute1` holds any value
+that is not exactly `Adult`, `Teen`, or `Child`, the setter refuses to touch it and `-AllowTierChange`
+does not override that. The switch only permits one known tier to replace another. Clearing a
+foreign value is a deliberate decision to make outside this script.
+
+## Migrating the original assigned groups
+
+The three groups started out as assigned (explicit-membership) groups.
+`scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1` - and the
+**Convert device tier groups to dynamic** workflow - converts them **in place**. It preflights all
+three groups together, reading every existing member, its current tag, and any conflicting tag;
+stamps `extensionAttribute1` from the existing static membership; verifies each write by reading it
+back; and only then `PATCH`es the groups with their dynamic rules. It never deletes or recreates a
+group, so the object IDs - and therefore every existing policy assignment - survive the conversion.
+
+## Local administrator rights
 
 Local administrator rights for adults and teens are **not** granted by making an adult/teen group
-administrator on every device in the tier. For Windows Autopilot, the adult and teen deployment
-profiles use **User account type = Administrator**, which adds only the user joining that device to
-that device's local Administrators group. Child deployment remains standard-user.
-
-Group Tag dynamic rules are a **Windows Autopilot-only** mechanism. `CaC-Devices-Child` is also
-targeted by the Android corporate-owned enrollment restriction policy
-(`android-fully-managed-restrictions-child.json`), and Android devices have no Autopilot Group
-Tag to match on - those still need to be added to `CaC-Devices-Child` by hand in the portal after
-enrollment.
-
-These three groups were migrated from assigned (explicit-membership) to dynamic groups by a
-one-time bootstrap operation, because Graph does not allow converting an existing group's
-membership type in place - see `scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1` for
-the mechanics and rollback caveats if this ever needs to be redone (for example, in a fresh
-tenant).
+administrator on every device in the tier, and not by a proactive remediation script deployed to a
+tier. Windows Autopilot and Autopilot device preparation set **User account type = Administrator**
+for the adult and teen profiles, which adds only the user joining that device to that device's local
+Administrators group. Child deployment remains standard-user. See
+[`enterprise-child-enrollment.md`](enterprise-child-enrollment.md) for the Entra device-join
+setting that scopes this.

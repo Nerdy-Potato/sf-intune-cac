@@ -1,0 +1,65 @@
+name: Set Entra device tier tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_object_id:
+        description: 'Exact Entra device object ID (UUID, not Intune device ID)'
+        type: string
+        required: true
+      tier:
+        description: 'Administrator-approved device tier'
+        type: choice
+        options:
+          - Adult
+          - Teen
+          - Child
+        required: true
+      allow_tier_change:
+        description: 'Permit changing an existing nonempty tag'
+        type: boolean
+        required: true
+        default: false
+      confirm:
+        description: 'Explicitly confirm applying this tag to the exact device object ID'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cac-device-tier-writes
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set tier
+        shell: pwsh
+        env:
+          DEVICE_OBJECT_ID: ${{ inputs.device_object_id }}
+          DEVICE_TIER: ${{ inputs.tier }}
+          ALLOW_TIER_CHANGE: ${{ inputs.allow_tier_change }}
+          APPLY_CONFIRM: ${{ inputs.confirm }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if ($env:APPLY_CONFIRM -ne 'true') {
+            throw 'Setting a device tier requires confirm=true.'
+          }
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+          ./scripts/bootstrap/Set-CaCDeviceTierTag.ps1 `
+            -DeviceObjectId $env:DEVICE_OBJECT_ID `
+            -Tier $env:DEVICE_TIER `
+            -AllowTierChange:($env:ALLOW_TIER_CHANGE -eq 'true') `
+            -Confirm:$false

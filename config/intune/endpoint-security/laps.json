@@ -1,19 +1,13 @@
 {
   "$schema": "../../../schemas/policy.schema.json",
   "comment": [
-    "Freshly-authored (NOT adopted) Windows LAPS Settings Catalog policy. This is the real",
-    "CaC-managed replacement for the manually-created 'LAPS-Shell' policy, which existed only",
-    "so its live Graph JSON payload could be captured/inspected. Uses the same",
-    "settingDefinitionIds/values reverse-engineered from that shell (enable LAPS, target account",
-    "name x3nc0n, password age 30 days / complexity 4 (large letters + small letters + numbers +",
-    "special chars) / length 14).",
-    "Manual LAPS mode alone does not create custom local accounts - the companion",
-    "laps-account-management.json policy (deviceConfigurations, documented LAPS",
-    "CSP OMA-URI nodes) enables Windows LAPS Automatic Account Management so supported Windows 11",
-    "24H2+ devices create/manage the x3nc0n account. That companion policy was independently",
-    "authored (not adopted) and is unaffected by this change.",
-    "Once this policy deploys cleanly via CI/CD, LAPS-Shell (the manually-created shell used only",
-    "for JSON inspection) will be removed from both the tenant and this repo in a follow-up change."
+    "TRANSITION ONLY: retain this legacy ADMX_AdmPwd policy until the complete modern LAPS CSP",
+    "policy in laps-account-management.json has applied and Entra password backup is verified.",
+    "These legacy settings do not configure modern Windows LAPS and are not inherited by it.",
+    "Deleting this definition now would schedule an orphan deletion; normal deployment correctly",
+    "refuses unapproved deletes. After backup and emergency access are verified, remove this file",
+    "and retire the exact live legacy policy with an explicitly reviewed deletion.",
+    "Do not add new settings here. The modern policy owns all future LAPS changes."
   ],
   "name": "laps",
   "resource": "deviceManagementConfigurationPolicies",

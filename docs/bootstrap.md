@@ -21,11 +21,25 @@ It creates, idempotently:
 
 | Application | Graph application roles | Federated subjects |
 | --- | --- | --- |
-| `sf-intune-cac-plan` | `DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `DeviceManagementServiceConfig.Read.All`, `DeviceManagementScripts.Read.All`, `Group.Read.All`, `User.Read.All` | Legacy and numeric-ID subjects for `pull_request` and `environment:plan` |
-| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `DeviceManagementServiceConfig.ReadWrite.All`, `DeviceManagementScripts.ReadWrite.All`, `Group.ReadWrite.All`, `User.Read.All` | Legacy and numeric-ID subjects for `environment:production` |
+| `sf-intune-cac-plan` | `DeviceManagementConfiguration.Read.All`, `DeviceManagementApps.Read.All`, `DeviceManagementServiceConfig.Read.All`, `Device.Read.All`, `Group.Read.All`, `User.Read.All` | Legacy and numeric-ID subjects for `pull_request` and `environment:plan` |
+| `sf-intune-cac-apply` | `DeviceManagementConfiguration.ReadWrite.All`, `DeviceManagementApps.ReadWrite.All`, `DeviceManagementServiceConfig.ReadWrite.All`, `Device.ReadWrite.All`, `Group.ReadWrite.All`, `User.Read.All` | Legacy and numeric-ID subjects for `environment:production` |
 
 No client secrets are created. Both applications authenticate by exchanging GitHub's short-lived
 OIDC token, so there is nothing stored in GitHub and nothing to rotate.
+
+`Device.Read.All` and `Device.ReadWrite.All` replaced the Intune proactive-remediation script
+permissions (`DeviceManagementScripts.*`), which no longer have a caller. `Device.ReadWrite.All` is
+what the apply identity uses to write a device's `extensionAttribute1` tier tag
+(see [age-tiers.md](age-tiers.md)). Two cautions:
+
+- That permission is **not** scoped per attribute by OAuth. The narrow scope is a property of the
+  scripts that use it - `Set-CaCDeviceTierTag.ps1` and
+  `Convert-CaCDeviceTierGroupsToDynamic.ps1`, both manually dispatched, both gated on the
+  `production` environment - not of the grant itself.
+- Re-running the bootstrap **adds** the new application roles; it does not revoke the ones it no
+  longer declares, and it does not re-consent on your behalf. Until an administrator grants admin
+  consent for the updated roles, the live consent still reflects the previous set. Revoke the
+  obsolete `DeviceManagementScripts.*` grants by hand once no caller remains.
 
 Re-running the script is safe: it reconciles rather than duplicating. Re-run it after pulling a
 change that adds a Graph role; existing applications are updated in place.
