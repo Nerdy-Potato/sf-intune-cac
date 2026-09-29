@@ -274,10 +274,19 @@ Describe 'Deployment action propagation' {
         # only Settings and other structural fields are rejected. This meant a description-only
         # drift (e.g. the doubled managed-marker bug fixed above) could never self-heal via a
         # normal apply and would require someone to fix it by hand in the portal every time.
-        $policy = $script:Configuration.Policies |
-            Where-Object { $_.resource -eq 'deviceManagementConfigurationPolicies' } |
-            Select-Object -First 1
-        $policy | Should -Not -BeNullOrEmpty -Because 'at least one configured policy should be a Settings Catalog policy'
+        # Synthetic on purpose: the repository currently authors no Settings Catalog policy, and
+        # this regression is about how the engine routes an Update for that resource type.
+        $policy = @{
+            name        = 'settings-catalog-regression'
+            resource    = 'deviceManagementConfigurationPolicies'
+            assignments = @(@{ group = 'sg-tier-child'; intent = 'include' })
+            payload     = @{
+                name        = 'CaC - Settings Catalog Regression'
+                displayName = 'CaC - Settings Catalog Regression'
+                description = $script:Configuration.Tenant.managedMarker
+                settings    = @()
+            }
+        }
 
         $plan = [pscustomobject]@{
             Kind    = 'Policy'
@@ -314,10 +323,19 @@ Describe 'Deployment action propagation' {
     }
 
     It 'still requires manual portal action for Settings Catalog Update drift beyond description/name' {
-        $policy = $script:Configuration.Policies |
-            Where-Object { $_.resource -eq 'deviceManagementConfigurationPolicies' } |
-            Select-Object -First 1
-        $policy | Should -Not -BeNullOrEmpty
+        # Synthetic on purpose: the repository currently authors no Settings Catalog policy, and
+        # this regression is about how the engine routes an Update for that resource type.
+        $policy = @{
+            name        = 'settings-catalog-regression'
+            resource    = 'deviceManagementConfigurationPolicies'
+            assignments = @(@{ group = 'sg-tier-child'; intent = 'include' })
+            payload     = @{
+                name        = 'CaC - Settings Catalog Regression'
+                displayName = 'CaC - Settings Catalog Regression'
+                description = $script:Configuration.Tenant.managedMarker
+                settings    = @()
+            }
+        }
 
         $plan = [pscustomobject]@{
             Kind    = 'Policy'
@@ -667,342 +685,91 @@ Describe 'Bootstrap and managed-object safety' {
     }
 }
 
-Describe 'Device tier group dynamic membership' {
+Describe 'Retired local admin remediation and Autopilot Group Tag surfaces' {
     BeforeAll {
-        $script:ConvertBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1') -Raw
-        $script:ConvertWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/convert-device-tier-groups-to-dynamic.yml') -Raw
-        $script:SetTagBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1') -Raw
-        $script:SetTagWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/set-autopilot-group-tag.yml') -Raw
+        $script:RetiredPaths = @(
+            'scripts/remediation/Detect-CaCEnrollingUserLocalAdmin.ps1'
+            'scripts/remediation/Remediate-CaCEnrollingUserLocalAdmin.ps1'
+            'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1'
+            'scripts/bootstrap/New-CaCDeviceLocalAdminRecovery.ps1'
+            'scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1'
+            '.github/workflows/deploy-local-admin-remediation.yml'
+            '.github/workflows/set-autopilot-group-tag.yml'
+            'tests/DeviceLocalAdminRecovery.Tests.ps1'
+        )
+
+        $script:GitHubIdentityBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'bootstrap/New-CaCGitHubIdentity.ps1') -Raw
+
+        # Source surfaces only. docs/*.md deliberately keep the retirement explanation, and the
+        # retired file names appear in this test by design.
+        $script:SourceScanRoots = @(
+            'scripts', 'src', 'config', 'bootstrap', '.github/workflows', 'README.md'
+        )
     }
 
-    It 'gates the one-time group conversion behind explicit confirmation in production' {
-        $script:ConvertWorkflow | Should -Match 'workflow_dispatch:'
-        $script:ConvertWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
-        $script:ConvertWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
-        $script:ConvertWorkflow | Should -Match "inputs\.confirm.*-ne 'true'"
-        $script:ConvertWorkflow | Should -Match 'Convert-CaCDeviceTierGroupsToDynamic\.ps1\s+-Tier\s+\$tiers\s+-Confirm:\$false'
+    It 'retains the legacy LAPS policy definition until modern LAPS backup is verified' {
+        # Deleting the file would schedule an orphan deletion of the live legacy policy before a
+        # verified modern backup exists. It is retained deliberately, not overlooked.
+        $legacy = Join-Path $script:RepoRoot 'config/intune/endpoint-security/laps.json'
+        Test-Path -LiteralPath $legacy | Should -BeTrue
+
+        $comment = (Get-Content -LiteralPath $legacy -Raw | ConvertFrom-Json).comment -join ' '
+        $comment | Should -Match 'TRANSITION ONLY'
     }
 
-    It 'refuses to delete a group that does not carry the managed marker' {
-        $script:ConvertBootstrap | Should -Match 'notlike\s+"\*\$marker\*"'
-        $script:ConvertBootstrap | Should -Match 'Refusing to delete a group this repository may not own'
-    }
-
-    It 'warns about members that will not carry over before deleting' {
-        $script:ConvertBootstrap | Should -Match 'will NOT carry over'
-    }
-
-    It 'builds a Group Tag membership rule per tier and creates dynamic groups' {
-        $script:ConvertBootstrap | Should -Match "adult = 'CaC-Adult'"
-        $script:ConvertBootstrap | Should -Match "teen\s+= 'CaC-Teen'"
-        $script:ConvertBootstrap | Should -Match "child = 'CaC-Child'"
-        $script:ConvertBootstrap | Should -Match 'devicePhysicalIds -any'
-        $script:ConvertBootstrap | Should -Match "groupTypes\s*=\s*@\('DynamicMembership'\)"
-        $script:ConvertBootstrap | Should -Match "membershipRuleProcessingState\s*=\s*'On'"
-    }
-
-    It 'gates the Group Tag workflow behind the production environment' {
-        $script:SetTagWorkflow | Should -Match 'workflow_dispatch:'
-        $script:SetTagWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
-        $script:SetTagWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
-        $script:SetTagWorkflow | Should -Match 'Set-CaCAutopilotGroupTag\.ps1'
-    }
-
-    It 'uses the same Tier-to-Group-Tag mapping as the group conversion script' {
-        $script:SetTagBootstrap | Should -Match "adult = 'CaC-Adult'"
-        $script:SetTagBootstrap | Should -Match "teen\s+= 'CaC-Teen'"
-        $script:SetTagBootstrap | Should -Match "child = 'CaC-Child'"
-        $script:SetTagBootstrap | Should -Match 'updateDeviceProperties'
-    }
-
-    It 'converts an assigned device group to dynamic and skips one that already is' {
-        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1'
-        $capturedCalls = [System.Collections.Generic.List[object]]::new()
-        $marker = 'Managed by sf-intune-cac. Do not edit in the portal.'
-
-        $remoteGroups = @{
-            'CaC-Devices-Adult' = [pscustomobject]@{
-                id          = 'old-adult-id'
-                displayName = 'CaC-Devices-Adult'
-                description = "Device group corresponding to the adult tier. $marker"
-                groupTypes  = @()
-            }
-            'CaC-Devices-Teen'  = [pscustomobject]@{
-                id          = 'dynamic-teen-id'
-                displayName = 'CaC-Devices-Teen'
-                description = "Device group corresponding to the teen tier. $marker"
-                groupTypes  = @('DynamicMembership')
-            }
-        }
-
-        Mock -CommandName Import-Module {}
-        Mock -CommandName Connect-CaCGraph {}
-        Mock -CommandName Get-Module {
-            $fakeModule = [pscustomobject]@{}
-            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
-                param([scriptblock] $ScriptBlock)
-                $ScriptBlock
-            } -Force -PassThru
-        }
-
-        function Invoke-CaCGraphRequest {
-            param(
-                [string] $Method,
-                [string] $Uri,
-                $Body
-            )
-
-            $capturedCalls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body }) | Out-Null
-
-            if ($Method -eq 'GET' -and $Uri -match "^groups\?\`$filter=([^&]+)&") {
-                $filter = [System.Uri]::UnescapeDataString($Matches[1])
-                if ($filter -notmatch "^displayName eq '([^']+)'$") {
-                    throw "Unexpected group filter: $filter"
-                }
-                $name = $Matches[1]
-                $match = $remoteGroups[$name]
-                if ($match) { return [pscustomobject]@{ value = @($match) } }
-                return [pscustomobject]@{ value = @() }
-            }
-
-            if ($Method -eq 'GET' -and $Uri -match '^groups/([^/]+)/members\?') {
-                return [pscustomobject]@{ value = @() }
-            }
-
-            if ($Method -eq 'DELETE' -and $Uri -match '^groups/([^/]+)$') {
-                return $null
-            }
-
-            if ($Method -eq 'POST' -and $Uri -eq 'groups') {
-                return [pscustomobject]@{ id = 'new-group-id'; displayName = $Body.displayName }
-            }
-
-            throw "Unexpected Graph call: $Method $Uri"
-        }
-
-        & $scriptPath -Tier 'adult', 'teen' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false | Out-Null
-
-        $deleteCalls = $capturedCalls | Where-Object { $_.Method -eq 'DELETE' }
-        $deleteCalls | Should -HaveCount 1
-        $deleteCalls.Uri | Should -Be 'groups/old-adult-id'
-
-        $createCalls = $capturedCalls | Where-Object { $_.Method -eq 'POST' -and $_.Uri -eq 'groups' }
-        $createCalls | Should -HaveCount 1
-        $createCalls.Body.displayName | Should -Be 'CaC-Devices-Adult'
-        $createCalls.Body.groupTypes | Should -Contain 'DynamicMembership'
-        $createCalls.Body.membershipRule | Should -Match 'CaC-Adult'
-    }
-
-    It 'sets a device''s Group Tag by serial number' {
-        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1'
-        $capturedCalls = [System.Collections.Generic.List[object]]::new()
-
-        Mock -CommandName Import-Module {}
-        Mock -CommandName Connect-CaCGraph {}
-        Mock -CommandName Get-Module {
-            $fakeModule = [pscustomobject]@{}
-            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
-                param([scriptblock] $ScriptBlock)
-                $ScriptBlock
-            } -Force -PassThru
-        }
-
-        function Invoke-CaCGraphRequest {
-            param(
-                [string] $Method,
-                [string] $Uri,
-                $Body
-            )
-
-            $capturedCalls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body }) | Out-Null
-
-            if ($Method -eq 'GET' -and $Uri -match '^deviceManagement/windowsAutopilotDeviceIdentities\?\`?\$filter=(.+)$') {
-                [System.Uri]::UnescapeDataString($Matches[1]) | Should -Be "contains(serialNumber,'5CD1234ABC')"
-                return [pscustomobject]@{ value = @([pscustomobject]@{ id = 'autopilot-device-id'; groupTag = '' }) }
-            }
-
-            if ($Method -eq 'POST' -and $Uri -match '/updateDeviceProperties$') {
-                return $null
-            }
-
-            throw "Unexpected Graph call: $Method $Uri"
-        }
-
-        & $scriptPath -SerialNumber '5CD1234ABC' -Tier 'adult' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false | Out-Null
-
-        $postCall = $capturedCalls | Where-Object { $_.Method -eq 'POST' }
-        $postCall | Should -HaveCount 1
-        $postCall.Uri | Should -Be 'deviceManagement/windowsAutopilotDeviceIdentities/autopilot-device-id/updateDeviceProperties'
-        $postCall.Body.groupTag | Should -Be 'CaC-Adult'
-    }
-}
-
-Describe 'Enrolling-user local admin remediation' {
-    BeforeAll {
-        $script:DetectScript = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/remediation/Detect-CaCEnrollingUserLocalAdmin.ps1') -Raw
-        $script:RemediateScript = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/remediation/Remediate-CaCEnrollingUserLocalAdmin.ps1') -Raw
-        $script:RemediationBootstrap = Get-Content -Path (Join-Path $script:RepoRoot 'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1') -Raw
-        $script:RemediationWorkflow = Get-Content -Path (Join-Path $script:RepoRoot '.github/workflows/deploy-local-admin-remediation.yml') -Raw
-    }
-
-    It 'reads the enrolling user UPN from the MS DM Server enrollment registry key in both on-device scripts' {
-        foreach ($content in @($script:DetectScript, $script:RemediateScript)) {
-            $content | Should -Match 'HKLM:\\SOFTWARE\\Microsoft\\Enrollments'
-            $content | Should -Match "ProviderID\s+-ne\s+'MS DM Server'"
+    It 'no longer ships any retired remediation, recovery, or Group Tag file' {        foreach ($relative in $script:RetiredPaths) {
+            $full = Join-Path $script:RepoRoot $relative
+            Test-Path -LiteralPath $full | Should -BeFalse -Because "$relative was deliberately retired"
         }
     }
 
-    It 'resolves the enrolling user as an AzureAD-prefixed local security principal' {
-        $script:DetectScript | Should -Match 'AzureAD\\\$upn'
-        $script:DetectScript | Should -Match 'NTAccount'
-        $script:RemediateScript | Should -Match 'AzureAD\\\$upn'
-    }
+    It 'leaves no executable or configuration reference to a retired file' {
+        $names = @($script:RetiredPaths | ForEach-Object { Split-Path -Path $_ -Leaf })
+        $offenders = [System.Collections.Generic.List[string]]::new()
 
-    It 'exits 0 from detection when the enrolling user is already a local administrator, 1 otherwise' {
-        $script:DetectScript | Should -Match '(?s)is already a local administrator.*?exit 0'
-        $script:DetectScript | Should -Match '(?s)is not a local administrator.*?exit 1'
-    }
+        foreach ($root in $script:SourceScanRoots) {
+            $full = Join-Path $script:RepoRoot $root
+            if (-not (Test-Path -LiteralPath $full)) { continue }
 
-    It 'falls back to net localgroup when Add-LocalGroupMember fails in the remediation script' {
-        $script:RemediateScript | Should -Match 'Add-LocalGroupMember\s+-Group\s+''Administrators'''
-        $script:RemediateScript | Should -Match 'net localgroup Administrators \$accountName /add'
-    }
-
-    It 'uses the module Graph auth pattern and requires the managed marker before updating an existing remediation script' {
-        $script:RemediationBootstrap | Should -Match 'CmdletBinding\(SupportsShouldProcess,\s*ConfirmImpact\s*=\s*''Medium'''
-        $script:RemediationBootstrap | Should -Match 'Connect-CaCGraph\s+-TenantId\s+\$TenantId\s+-ClientId\s+\$ClientId'
-        $script:RemediationBootstrap | Should -Match 'NewBoundScriptBlock'
-        $script:RemediationBootstrap | Should -Match 'deviceHealthScripts'
-        $script:RemediationBootstrap | Should -Match 'does not carry the repository managed marker'
-        $script:RemediationBootstrap | Should -Match 'ShouldProcess'
-    }
-
-    It 'base64-encodes both on-device scripts and never assigns the Child tier' {
-        $script:RemediationBootstrap | Should -Match 'detectionScriptContent'
-        $script:RemediationBootstrap | Should -Match 'remediationScriptContent'
-        $script:RemediationBootstrap | Should -Match 'ToBase64String'
-        $script:RemediationBootstrap | Should -Match "ValidateSet\('adult',\s*'teen'\)"
-        $script:RemediationBootstrap | Should -Not -Match "'child'"
-    }
-
-    It 'gates the deployment workflow behind the production environment' {
-        $script:RemediationWorkflow | Should -Match 'workflow_dispatch:'
-        $script:RemediationWorkflow | Should -Match '(?m)^\s*environment:\s*production\s*$'
-        $script:RemediationWorkflow | Should -Match 'AZURE_CLIENT_ID:\s*\$\{\{\s*vars\.AZURE_APPLY_CLIENT_ID\s*\}\}'
-        $script:RemediationWorkflow | Should -Match 'New-CaCLocalAdminRemediationScript\.ps1'
-    }
-
-    It 'keeps tier deployment as the default and requires explicit confirmation for one-device recovery' {
-        $script:RemediationWorkflow | Should -Match "(?s)mode:.*?default: 'tiers'.*?single-device-recovery"
-        $script:RemediationWorkflow | Should -Match 'RECOVERY_DEVICE_NAME:\s*\$\{\{\s*inputs\.device_name\s*\}\}'
-        $script:RemediationWorkflow | Should -Match 'RECOVERY_USER_PRINCIPAL_NAME:\s*\$\{\{\s*inputs\.user_principal_name\s*\}\}'
-        $script:RemediationWorkflow | Should -Match 'RECOVERY_CONFIRM:\s*\$\{\{\s*inputs\.confirm\s*\}\}'
-        $script:RemediationWorkflow | Should -Match "(?s)RECOVERY_CONFIRM -eq 'true'.*?New-CaCDeviceLocalAdminRecovery\.ps1.*?else\s*\{.*?New-CaCDeviceLocalAdminRecovery\.ps1.*?-WhatIf"
-        $deployStep = ($script:RemediationWorkflow -split '- name: Deploy proactive remediation', 2)[1]
-        $runBlock = ($deployStep -split '(?m)^\s*run:\s*\|\s*', 2)[1]
-        $runBlock | Should -Not -Match '\$\{\{\s*inputs\.'
-    }
-
-    It 'creates a new proactive remediation and assigns it with an hourly schedule when none exists' {
-        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1'
-        $capturedCalls = [System.Collections.Generic.List[object]]::new()
-
-        Mock -CommandName Import-Module {}
-        Mock -CommandName Connect-CaCGraph {}
-        Mock -CommandName Get-Module {
-            $fakeModule = [pscustomobject]@{}
-            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
-                param([scriptblock] $ScriptBlock)
-                $ScriptBlock
-            } -Force -PassThru
-        }
-
-        function Invoke-CaCGraphRequest {
-            param(
-                [string] $Method,
-                [string] $Uri,
-                $Body
-            )
-
-            $capturedCalls.Add([pscustomobject]@{ Method = $Method; Uri = $Uri; Body = $Body }) | Out-Null
-
-            if ($Method -eq 'GET' -and $Uri -match "^deviceManagement/deviceHealthScripts\?\`$filter=") {
-                return [pscustomobject]@{ value = @() }
-            }
-
-            if ($Method -eq 'POST' -and $Uri -eq 'deviceManagement/deviceHealthScripts') {
-                return [pscustomobject]@{ id = 'script-id'; displayName = $Body.displayName }
-            }
-
-            if ($Method -eq 'GET' -and $Uri -match "^groups\?\`$filter=([^&]+)&") {
-                $filter = [System.Uri]::UnescapeDataString($Matches[1])
-                if ($filter -eq "displayName eq 'CaC-Devices-Adult'") {
-                    return [pscustomobject]@{ value = @([pscustomobject]@{ id = 'adult-group-id'; displayName = 'CaC-Devices-Adult' }) }
-                }
-                if ($filter -eq "displayName eq 'CaC-Devices-Teen'") {
-                    return [pscustomobject]@{ value = @([pscustomobject]@{ id = 'teen-group-id'; displayName = 'CaC-Devices-Teen' }) }
-                }
-                throw "Unexpected group filter: $filter"
-            }
-
-            if ($Method -eq 'POST' -and $Uri -eq 'deviceManagement/deviceHealthScripts/script-id/assign') {
-                return $null
-            }
-
-            throw "Unexpected Graph call: $Method $Uri"
-        }
-
-        & $scriptPath -Tier 'adult', 'teen' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false | Out-Null
-
-        $createCall = $capturedCalls | Where-Object { $_.Method -eq 'POST' -and $_.Uri -eq 'deviceManagement/deviceHealthScripts' }
-        $createCall | Should -HaveCount 1
-        $createCall.Body.displayName | Should -Be 'CaC - Enrolling User Local Admin'
-        $createCall.Body.detectionScriptContent | Should -Not -BeNullOrEmpty
-        $createCall.Body.remediationScriptContent | Should -Not -BeNullOrEmpty
-
-        $assignCall = $capturedCalls | Where-Object { $_.Method -eq 'POST' -and $_.Uri -eq 'deviceManagement/deviceHealthScripts/script-id/assign' }
-        $assignCall | Should -HaveCount 1
-        $assignCall.Body.deviceHealthScriptAssignments | Should -HaveCount 2
-        ($assignCall.Body.deviceHealthScriptAssignments.target.groupId) | Should -Contain 'adult-group-id'
-        ($assignCall.Body.deviceHealthScriptAssignments.target.groupId) | Should -Contain 'teen-group-id'
-        ($assignCall.Body.deviceHealthScriptAssignments | ForEach-Object { $_.runSchedule.'@odata.type' }) |
-            Should -Contain '#microsoft.graph.deviceHealthScriptHourlySchedule'
-    }
-
-    It 'refuses to update an existing proactive remediation that does not carry the managed marker' {
-        $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1'
-
-        Mock -CommandName Import-Module {}
-        Mock -CommandName Connect-CaCGraph {}
-        Mock -CommandName Get-Module {
-            $fakeModule = [pscustomobject]@{}
-            $fakeModule | Add-Member -MemberType ScriptMethod -Name NewBoundScriptBlock -Value {
-                param([scriptblock] $ScriptBlock)
-                $ScriptBlock
-            } -Force -PassThru
-        }
-
-        function Invoke-CaCGraphRequest {
-            param(
-                [string] $Method,
-                [string] $Uri,
-                $Body
-            )
-
-            if ($Method -eq 'GET' -and $Uri -match "^deviceManagement/deviceHealthScripts\?\`$filter=") {
-                return [pscustomobject]@{
-                    value = @([pscustomobject]@{
-                            id          = 'existing-id'
-                            displayName = 'CaC - Enrolling User Local Admin'
-                            description = 'Hand-created in the portal, not by this repository.'
-                        })
+            $files = @(Get-ChildItem -LiteralPath $full -Recurse -File)
+            foreach ($file in $files) {
+                # config/tenant.json keeps a dated, append-only change comment; its historical
+                # entries name objects that have since been retired.
+                if ($file.Name -eq 'tenant.json') { continue }
+                $content = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
+                if (-not $content) { continue }
+                foreach ($name in $names) {
+                    if ($content -like "*$name*") {
+                        $offenders.Add("$($file.FullName) references $name") | Out-Null
+                    }
                 }
             }
-
-            throw "Unexpected Graph call: $Method $Uri"
         }
 
-        { & $scriptPath -Tier 'adult' -TenantId 'tenant-id' -ClientId 'client-id' -Confirm:$false } |
-            Should -Throw '*does not carry the repository managed marker*'
+        $offenders | Should -BeNullOrEmpty -Because ($offenders -join '; ')
+    }
+
+    It 'retires the Intune script permissions in favour of device permissions on both identities' {
+        $script:GitHubIdentityBootstrap | Should -Not -Match 'DeviceManagementScripts\.'
+        $script:GitHubIdentityBootstrap | Should -Match "'Device\.Read\.All'"
+        $script:GitHubIdentityBootstrap | Should -Match "'Device\.ReadWrite\.All'"
+    }
+
+    It 'keeps the plan identity read-only and the apply identity write-capable' {
+        $applyStart = $script:GitHubIdentityBootstrap.IndexOf("Name    = 'sf-intune-cac-apply'")
+        $applyStart | Should -BeGreaterThan 0
+        $planBlock = $script:GitHubIdentityBootstrap.Substring(0, $applyStart)
+        $applyBlock = $script:GitHubIdentityBootstrap.Substring($applyStart)
+
+        $planBlock | Should -Match "'Device\.Read\.All'"
+        $planBlock | Should -Not -Match "'Device\.ReadWrite\.All'"
+        $planBlock | Should -Match "'Group\.Read\.All'"
+
+        $applyBlock | Should -Match "'Device\.ReadWrite\.All'"
+        $applyBlock | Should -Match "'Group\.ReadWrite\.All'"
+    }
+
+    It 'never declares proactive remediation (deviceHealthScripts) surfaces in the identity bootstrap' {
+        $script:GitHubIdentityBootstrap | Should -Not -Match 'deviceHealthScripts'
     }
 }

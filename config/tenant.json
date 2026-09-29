@@ -23,7 +23,21 @@
     "(config/intune/endpoint-security/laps.json), which deployed successfully via CI/CD. Removed",
     "the laps-shell adoption entry here; the live LAPS-Shell object is now an orphaned CaC-managed",
     "resource with no matching config and must be deleted via an approved apply",
-    "(requireExplicitDeleteApproval / -AllowDelete)."
+    "(requireExplicitDeleteApproval / -AllowDelete).",
+    "2026-09-29: Retired the enrolling-user local admin proactive remediation, the one-device local",
+    "admin recovery flow, and the Autopilot Group Tag setter from this repository. Local admin comes",
+    "from Autopilot/device preparation 'User account type = Administrator' plus the Entra device-join",
+    "registering-users scope. Removing these files does not delete the deployed deviceHealthScripts",
+    "object, any live recovery policy or group, or previously granted Graph permissions; retire those",
+    "manually under an audited change - see docs/operations.md.",
+    "2026-09-29: Device tier groups now key on administrator-assigned device extensionAttribute1",
+    "(Adult/Teen/Child) instead of the Windows-only Autopilot Group Tag, so Android child devices are",
+    "covered by the same rule. Tagging stays a manual per-device admin step and dynamic membership is",
+    "eventually consistent - see docs/age-tiers.md.",
+    "2026-09-29: Consolidated modern Windows LAPS into 'CaC - Windows LAPS - Account Management'.",
+    "The legacy ADMX_AdmPwd policy (laps.json) is retained as transition-only scaffolding: removing",
+    "it would schedule an orphan deletion of the live legacy policy before modern password backup to",
+    "Entra ID is verified on a representative device. Retire both together, later, under review."
   ],
   "adoption": {
     "oneTime": true,

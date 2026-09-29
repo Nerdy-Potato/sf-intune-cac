@@ -36,91 +36,86 @@ apply - see [bootstrap.md](bootstrap.md) for setting that up.
 
 ### Device missing from its tier device group
 
-`CaC-Devices-Adult`/`-Teen`/`-Child` are dynamic groups: Entra ID adds a device automatically once
-it is Windows Autopilot-registered with the matching Group Tag (`CaC-Adult`/`CaC-Teen`/`CaC-Child`
-respectively - see [`age-tiers.md`](age-tiers.md)). If a device-scoped policy (most importantly
-Windows LAPS or tier-specific restrictions) is not applying to an enrolled Windows device, check in
-this order:
+`CaC-Devices-Adult`/`-Teen`/`-Child` are dynamic groups whose membership rule matches the Entra
+device object's `extensionAttribute1` (`Adult`/`Teen`/`Child` - see [`age-tiers.md`](age-tiers.md)).
+Entra maintains membership; this repository never writes it. If a device-scoped policy (most
+importantly Windows LAPS, the tier restrictions, or the child Android restrictions and Defender/GSA
+app configuration) is not applying to an enrolled device, check in this order:
 
-1. **Confirm the device's Group Tag.** Intune admin center > Devices > Enrollment > Windows
-   Autopilot devices > find the device > check its Group Tag column. If it is blank or wrong, fix
-   it:
+1. **Confirm the device is tagged.** Entra admin center > Devices > find the device > check
+   `extensionAttribute1`. Tagging is a manual step per device and a newly enrolled device has no
+   tag until an administrator sets one. If it is blank or wrong, fix it with the exact Entra device
+   object ID:
 
    ```powershell
-   gh workflow run set-autopilot-group-tag.yml -f serial_number='<serial>' -f tier='adult'
+   gh workflow run set-device-tier-tag.yml `
+     -f device_object_id='<entra-device-object-id>' `
+     -f tier='Adult' `
+     -f confirm=true
    ```
 
-   (or run `scripts/bootstrap/Set-CaCAutopilotGroupTag.ps1` directly with Graph access.)
-2. **Confirm dynamic group membership caught up.** Entra ID re-evaluates dynamic group rules
-   automatically after a device attribute changes; this is normally fast for a tenant this size,
-   but allow a few minutes. Check membership on the group itself in the Entra admin center.
+   (or run `scripts/bootstrap/Set-CaCDeviceTierTag.ps1` directly with Graph access). Changing an
+   existing nonempty tag additionally needs `allow_tier_change`/`-AllowTierChange`.
+2. **Confirm dynamic group membership caught up.** Entra re-evaluates dynamic rules asynchronously
+   after a device attribute changes. A verified tag write is not proof of membership - open the
+   group in the Entra admin center and confirm the device is listed before concluding the policy is
+   at fault.
 3. **Trigger an Intune policy sync** on the affected device (Company Portal, or Devices > the
    device > **Sync** in the Intune admin center) so it picks up the policy on its next check-in.
 
-Because these are dynamic groups, there is no manual "add to group" fallback - membership is
-Entra-computed from the Group Tag and cannot be overridden by adding the device by hand. If a
-device is enrolled via something other than Windows Autopilot (for example, an Android
-corporate-owned device targeting `CaC-Devices-Child`), it has no Group Tag to match on and must be
-added to the relevant device group by hand instead, since Group Tag dynamic rules are a Windows
-Autopilot-only mechanism.
+Because these are dynamic groups, adding the device to the group by hand is not a fallback - Entra
+recomputes membership from the attribute. Tag the device instead. The rule has no operating system
+condition, so Android corporate-owned child devices are covered by the same tag.
 
-Adult/teen local administrator rights are handled earlier in enrollment by the Windows Autopilot
-profile's **User account type = Administrator** setting, not by these dynamic device groups. If the
-joining adult/teen user is not a local admin immediately after Autopilot completes, check the
-assigned Autopilot deployment profile first; MDM policy sync is not the source of that permission.
+Adult/teen local administrator rights are handled at enrollment by the Windows Autopilot profile's
+**User account type = Administrator** setting and the Entra device-join registering-users scope, not
+by these device groups. If the joining adult/teen user is not a local admin immediately after
+Autopilot completes, check the assigned deployment profile first; MDM policy sync is not the source
+of that permission.
 
-### One-device local administrator recovery
+### Retiring the removed local administrator remediation
 
-For an approved recovery affecting one Windows device and one explicitly selected user, use the
-`single-device-recovery` mode in `deploy-local-admin-remediation.yml` from the reviewed feature
-ref. The workflow keeps `tiers` as its default. With `confirm=false` it runs a Graph-read-only
-`-WhatIf` preview; only `confirm=true` permits writes, still behind the `production` environment and
-the existing apply OIDC identity. This recovery does not change Entra roles, re-enroll the device,
-or assign a policy to a user or tier.
+The proactive-remediation approach to enrolling-user local admin (the detection/remediation script
+pair, its bootstrap, the one-device recovery script, and their workflows) has been removed from this
+repository, along with the Autopilot Group Tag setter. Do not reintroduce a retry script, a
+one-device recovery workflow, or a broad "make the Adult/Teen group administrator" assignment;
+local administrator rights come from the enrollment-time settings described above.
 
-Before enabling the workflow identity, confirm that its Microsoft Graph application permissions
-are already granted: `DeviceManagementManagedDevices.Read.All` to resolve the Intune device,
-`Device.Read.All` and `User.Read.All` to resolve the linked Entra device and selected user,
-`Group.ReadWrite.All`, `GroupMember.ReadWrite.All`, and `Device.ReadWrite.All` to create and
-populate the static security device group, and `DeviceManagementConfiguration.ReadWrite.All` to
-create, inspect, and assign the custom configuration. These requirements follow the Microsoft
-Graph permissions tables for [managedDevices](https://learn.microsoft.com/graph/api/intune-devices-manageddevice-list?view=graph-rest-1.0),
-[devices](https://learn.microsoft.com/graph/api/device-list?view=graph-rest-1.0),
-[users](https://learn.microsoft.com/graph/api/user-list?view=graph-rest-1.0),
-[group membership](https://learn.microsoft.com/graph/api/group-post-members?view=graph-rest-1.0),
-and [device configurations](https://learn.microsoft.com/graph/api/intune-deviceconfig-windows10customconfiguration-create?view=graph-rest-1.0).
-This procedure does not add or modify cloud role grants.
+Removing those files does **not** change the tenant. The following remain live until somebody
+retires them deliberately, under an explicit and audited change:
 
-Dispatch the feature ref with the exact device name and UPN selected for the recovery; do not put
-personal device or user identifiers in repository files:
+- The deployed `deviceHealthScripts` proactive remediation object and its assignments. Repository
+  cleanup neither deletes it nor stops it running.
+- Any recovery policy, static recovery device group, or membership created by the retired recovery
+  flow. Unassigning an additive policy does not prove that a local Administrators membership it
+  granted has been revoked - verify on the endpoint itself (for example with
+  `Get-LocalGroupMember -Group Administrators`) before treating it as removed. Leave live recovery
+  policies in place until local administrator membership and LAPS escrow are both verified.
+- The Microsoft Graph application permissions the retired flows used. The identity bootstrap adds
+  the permissions this repository now needs; it never revokes rights that were previously granted.
+  Revoke the obsolete grants manually once no caller remains, and re-consent the applications so
+  the live consent matches `bootstrap/New-CaCGitHubIdentity.ps1` - see
+  [bootstrap.md](bootstrap.md).
+### Verifying child Defender and Global Secure Access coverage
 
-```powershell
-gh workflow run deploy-local-admin-remediation.yml `
-  --ref <feature-branch> `
-  -f mode=single-device-recovery `
-  -f device_name='DEVICE_NAME' `
-  -f user_principal_name='USER@TENANT_DOMAIN' `
-  -f confirm=true
-```
+The **Inventory Intune apps** workflow runs
+`scripts/bootstrap/Get-CaCAppInventory.ps1 -IncludeChildGsa` under the read-only plan identity, so
+every request is a `GET` and it cannot change anything. Beyond the app object inventory it reports,
+for the child Defender app configuration:
 
-The script resolves exactly one Windows Intune managedDevice, follows its `azureADDeviceId` to one
-enabled Entra device object, and requires exactly one enabled member user for the selected UPN. If
-the managed device reports a different user UPN, the operation stops before any write. The created
-policy uses the documented [LocalUsersAndGroups CSP `Configure`](https://learn.microsoft.com/windows/client-management/mdm/policy-csp-localusersandgroups#configure)
-OMA-URI and its `U` (Update) action,
-adding only the selected user's Entra SID to built-in Administrators. It is assigned only to a
-deterministic static security group whose sole member is that Entra device object. A same-device
-recovery policy for a different user, an unowned object, extra group members, or any unexpected
-assignment blocks the operation.
+- both decoded Global Secure Access values, warning if either is not forced on;
+- the child user- and device-group include flags and their member counts, and the exclusion count;
+- how many competing Defender app configurations exist, warning when more than one could overlap;
+- the aggregate reported `deviceStatuses`, with no device, user, or tenant identifiers.
 
-After a successful workflow run, trigger an Intune device sync in Company Portal or from Intune
-admin center. Then sign out and sign back in if needed and verify local membership on the endpoint
-(for example, with `Get-LocalGroupMember -Group Administrators`). The script's success means only
-that the group membership and policy assignment were verified in Graph; it does **not** mean that
-the endpoint received the policy or that local membership changed. A separate existing
-LocalUsersAndGroups policy using the `R` (Replace) action for Administrators can override `U`
-(Update) behavior and remove members not listed by that replacing policy. Inspect overlapping
-device assignments before dispatch and resolve any such conflict before relying on the recovery.
+Run it twice around a change to this area: once before deploying, to record the starting state, and
+once after, to confirm the reviewed configuration is what the tenant now holds.
+
+What it proves is bounded. It reads what Graph says the *configuration object and its assignments*
+are, plus what devices have *reported back*. It is not endpoint proof: a device that has not checked
+in, has not yet been evaluated into a dynamic group, or has not applied the profile is not
+distinguishable here from one that has. Aggregate status counts are reported state, not enforcement.
+Confirm on the endpoint itself before concluding that a child device is actually covered.
 
 ### Stuck Intune app remediation
 
@@ -183,6 +178,11 @@ repository. A failure means one of two things:
 - Somebody changed something in the portal. Decide whether the change was right: if it was, bring it
   into `config/` in a pull request; if it was not, re-run **Deploy** to reconcile it away.
 - A deployment did not finish. Check the last Deploy run before doing anything else.
+
+Custom OMA-URI policies are compared setting by setting, so an added or changed node is real drift.
+Encrypted OMA settings (`isEncrypted`) are the exception: Graph returns them masked, so the plan
+cannot compare them and warns instead. A missing drift report for an encrypted node is not evidence
+that the tenant matches - verify the effective setting on an endpoint.
 
 ## Emergency change
 

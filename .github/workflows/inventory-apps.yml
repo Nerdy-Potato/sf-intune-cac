@@ -34,4 +34,4 @@ jobs:
         env:
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
-        run: ./scripts/bootstrap/Get-CaCAppInventory.ps1
+        run: ./scripts/bootstrap/Get-CaCAppInventory.ps1 -IncludeChildGsa

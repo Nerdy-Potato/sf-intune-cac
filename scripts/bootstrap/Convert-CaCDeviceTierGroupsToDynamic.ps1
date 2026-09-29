@@ -1,204 +1,155 @@
 #Requires -Version 7.2
 <#
 .SYNOPSIS
-    One-time bootstrap: converts CaC-Devices-Adult/Teen/Child from explicit to dynamic
-    membership, keyed on each device's Windows Autopilot Group Tag.
+    Safely convert the existing three CaC device-tier groups to dynamic membership.
 .DESCRIPTION
-    CaC-Devices-Adult/Teen/Child are the assignment targets for Windows LAPS and tier-specific
-    Settings Catalog policies. They were created as ordinary assigned (explicit-membership)
-    security groups, which meant nothing in the enrollment flow ever added a device to them - a
-    human had to remember to do it by hand, and when that step was missed, those device-scoped
-    policies silently never applied.
-
-    Microsoft Graph does not allow converting an existing group's membership type from assigned to
-    dynamic (groupTypes is immutable after creation), so the only way to make membership
-    self-maintaining is to delete the old assigned group and recreate it as a dynamic group whose
-    rule matches on the device's Windows Autopilot Group Tag (Microsoft Entra's `OrderID` device
-    physical id) - see https://learn.microsoft.com/autopilot/enrollment-autopilot#group-tag. Once
-    a device is Autopilot-registered with the matching tag, Entra ID adds it to the group on its
-    own, continuously, forever - no repository code, workflow, or schedule involved.
-
-    This is a one-time, disruptive operation on purpose:
-      - Any device currently sitting in the old assigned group (added by hand) is NOT carried
-        over. It must be Autopilot-registered with the matching Group Tag - see
-        Set-CaCAutopilotGroupTag.ps1 - for the new dynamic rule to pick it back up.
-      - The group's object id changes. Local-admin/LAPS policy assignments that reference the
-        group by config key (not by id) are automatically re-pointed at the new id on the next
-        plan/apply run; no config change is needed for that.
-      - Existing per-device compliance/assignment history tied to the old group id is not
-        preserved - consistent with how this repository already treats any other group deletion
-        (see docs/operations.md's Deletions/Rollback sections).
-
-    Requires Entra ID P1 (or an equivalent license that unlocks dynamic group membership rules).
-.PARAMETER Tier
-    Which tier's device group(s) to convert. Defaults to all three.
-.EXAMPLE
-    ./scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1 -WhatIf
-.EXAMPLE
-    ./scripts/bootstrap/Convert-CaCDeviceTierGroupsToDynamic.ps1 -Tier adult
+    Preflight reads every tier group, its members, and every tenant Entra device before writing.
+    Each assigned group's existing membership is the sole authority for extensionAttribute1.
+    Missing tags are stamped and read back before any group changes. The same group IDs and all
+    policy assignments are retained. A failed run is resumable; it never deletes groups or rolls
+    back tags. Dynamic membership evaluation is eventual: verify actual memberships separately
+    before declaring the rollout complete. Empty assigned groups are safe only if no tenant
+    device already carries that tier's tag.
+    Requires dynamic membership licensing and Graph Device.ReadWrite.All, Group.ReadWrite.All.
 #>
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
-    [Parameter()]
-    [ValidateSet('adult', 'teen', 'child')]
-    [string[]] $Tier = @('adult', 'teen', 'child'),
-
-    [Parameter()]
     [string] $TenantId = $env:AZURE_TENANT_ID,
-
-    [Parameter()]
     [string] $ClientId = $env:AZURE_CLIENT_ID,
-
-    [Parameter()]
-    [string] $ConfigPath = (Join-Path -Path $PSScriptRoot -ChildPath '../../config')
+    [string] $ConfigPath = (Join-Path $PSScriptRoot '../../config')
 )
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-function Get-LocalObjectProperty {
-    param(
-        [Parameter()] $InputObject,
-        [Parameter(Mandatory)] [string] $Name
-    )
-
-    if (-not $InputObject) { return $null }
-    if ($InputObject -is [System.Collections.IDictionary]) { return $InputObject[$Name] }
-
-    $property = $InputObject.PSObject.Properties[$Name]
-    if (-not $property) { return $null }
-
-    return $property.Value
-}
-
-function ConvertTo-ODataStringLiteral {
-    param(
-        [Parameter(Mandatory)] [string] $Value
-    )
-
-    return $Value.Replace("'", "''")
-}
-
-if (-not $TenantId -or -not $ClientId) {
-    throw (
-        'TenantId and ClientId are required. Run this script from GitHub Actions with ' +
-        'AZURE_TENANT_ID and AZURE_CLIENT_ID set for the OIDC-backed Graph identity.'
-    )
-}
-
-# The Windows Autopilot Group Tag each tier's devices must be registered with. Keep this in sync
-# with the guidance in docs/enterprise-child-enrollment.md and Set-CaCAutopilotGroupTag.ps1.
-$GroupTagByTier = @{
-    adult = 'CaC-Adult'
-    teen  = 'CaC-Teen'
-    child = 'CaC-Child'
-}
-
-# The three device group ids these tiers correspond to in config/identity/groups.json.
-$GroupConfigIdByTier = @{
-    adult = 'sg-devices-adult'
-    teen  = 'sg-devices-teen'
-    child = 'sg-devices-child'
-}
-
-$repoRoot = (Resolve-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath '../..')).Path
-Import-Module -Name (Join-Path $repoRoot 'src/IntuneCaC/IntuneCaC.psd1') -Force
-
+. (Join-Path $PSScriptRoot 'DeviceTierTag.Common.ps1')
+Assert-CaCDeviceTierIdentity -TenantId $TenantId -ClientId $ClientId
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+Import-Module (Join-Path $repoRoot 'src/IntuneCaC/IntuneCaC.psd1') -Force
 Connect-CaCGraph -TenantId $TenantId -ClientId $ClientId
+$graph = New-CaCDeviceTierGraphInvoker
+$config = Get-CaCConfiguration -Path $ConfigPath
+$marker = [string] $config.Tenant.managedMarker
+if ([string]::IsNullOrWhiteSpace($marker)) { throw 'Managed marker is missing from tenant configuration.' }
+$tiers = @('adult', 'teen', 'child')
+$groups = @{}
+$membersByTier = @{}
+$rules = @{}
 
-$module = Get-Module -Name IntuneCaC
-if (-not $module) {
-    throw 'IntuneCaC module did not load.'
+foreach ($tier in $tiers) {
+    $spec = @($config.Groups | Where-Object id -EQ "sg-devices-$tier")
+    if ($spec.Count -ne 1 -or $spec[0].memberType -ne 'device') {
+        throw "Expected exactly one device group configuration for $tier."
+    }
+    $name = [string] $spec[0].displayName
+    $filter = [uri]::EscapeDataString("displayName eq '$($name.Replace("'", "''"))'")
+    $matches = @(((& $graph 'GET' "groups?`$filter=$filter&`$select=id,displayName,mailNickname,description,securityEnabled,mailEnabled,groupTypes,membershipRule,membershipRuleProcessingState,onPremisesSyncEnabled,isAssignableToRole" $null).value))
+    if ($matches.Count -ne 1 -or [string] $matches[0].displayName -cne $name) {
+        throw "Expected exactly one existing group named '$name'; no groups will be created."
+    }
+    $group = $matches[0]
+    $groupId = [string] (Get-CaCDeviceTierProperty $group 'id')
+    $types = @(Get-CaCDeviceTierProperty $group 'groupTypes')
+    $rule = "(device.extensionAttribute1 -eq `"$([char]::ToUpperInvariant($tier[0]))$($tier.Substring(1))`")"
+    if (-not [guid]::TryParse($groupId, [ref] ([guid]::Empty)) -or
+        [string] (Get-CaCDeviceTierProperty $group 'mailNickname') -cne [string] $spec[0].mailNickname -or
+        [string] (Get-CaCDeviceTierProperty $group 'description') -notlike "*$marker*" -or
+        (Get-CaCDeviceTierProperty $group 'securityEnabled') -cne $true -or
+        (Get-CaCDeviceTierProperty $group 'mailEnabled') -cne $false -or
+        (Get-CaCDeviceTierProperty $group 'onPremisesSyncEnabled') -eq $true -or
+        (Get-CaCDeviceTierProperty $group 'isAssignableToRole') -eq $true -or
+        @($types | Where-Object { $_ -ne 'DynamicMembership' }).Count -gt 0) {
+        throw "Group '$name' has unexpected ownership or security properties; review it manually."
+    }
+    if ($types -contains 'DynamicMembership' -and (
+            [string] (Get-CaCDeviceTierProperty $group 'membershipRule') -cne $rule -or
+            [string] (Get-CaCDeviceTierProperty $group 'membershipRuleProcessingState') -cne 'On')) {
+        throw "Group '$name' is dynamic with an unexpected rule or paused processing; review it manually."
+    }
+    if ($types.Count -eq 0 -and (
+            -not [string]::IsNullOrWhiteSpace([string] (Get-CaCDeviceTierProperty $group 'membershipRule')) -or
+            [string] (Get-CaCDeviceTierProperty $group 'membershipRuleProcessingState') -notin @('', 'Off'))) {
+        throw "Assigned group '$name' has unexpected dynamic membership settings."
+    }
+    $groups[$tier] = $group
+    $rules[$tier] = $rule
+    $membersByTier[$tier] = @(((& $graph 'GET' "groups/$groupId/members" $null).value))
 }
 
-$graphInvoker = $module.NewBoundScriptBlock({
-        param(
-            [Parameter(Mandatory)][string] $Method,
-            [Parameter(Mandatory)][string] $Uri,
-            $Body
-        )
-
-        Invoke-CaCGraphRequest -Method $Method -Uri $Uri -Body $Body
-    })
-
-$configuration = Get-CaCConfiguration -Path $ConfigPath
-$marker = [string] $configuration.Tenant.managedMarker
-
-foreach ($t in $Tier) {
-    $groupConfigId = $GroupConfigIdByTier[$t]
-    $groupSpec = $configuration.Groups | Where-Object { $_.id -eq $groupConfigId }
-    if (-not $groupSpec) {
-        throw "No group configuration found for id '$groupConfigId'."
+# Invoke-CaCGraphRequest follows @odata.nextLink internally for all collection reads.
+$devices = @(((& $graph 'GET' 'devices?$select=id,extensionAttributes,operatingSystem' $null).value))
+$byId = @{}
+foreach ($device in $devices) {
+    $id = [string] (Get-CaCDeviceTierProperty $device 'id')
+    if (-not [guid]::TryParse($id, [ref] ([guid]::Empty)) -or $byId.ContainsKey($id)) {
+        throw "Device inventory contains a missing, invalid or duplicate object ID '$id'."
     }
-
-    $displayName = [string] $groupSpec.displayName
-    $groupTag = $GroupTagByTier[$t]
-    $membershipRule = "(device.devicePhysicalIds -any (_ -eq `"[OrderID]:$groupTag`"))"
-
-    Write-Host "`n== $displayName (tier: $t, Group Tag: $groupTag) =="
-
-    $filter = [System.Uri]::EscapeDataString("displayName eq '$(ConvertTo-ODataStringLiteral -Value $displayName)'")
-    $existing = @((& $graphInvoker 'GET' "groups?`$filter=$filter&`$select=id,displayName,description,groupTypes,membershipRule" $null).value)
-
-    if ($existing.Count -gt 1) {
-        throw "Refusing to convert '$displayName': more than one group has this exact display name."
+    $byId[$id] = $device
+}
+$assigned = @{}
+$expected = @{}
+foreach ($tier in $tiers) {
+    $tag = "$([char]::ToUpperInvariant($tier[0]))$($tier.Substring(1))"
+    foreach ($member in $membersByTier[$tier]) {
+        $id = [string] (Get-CaCDeviceTierProperty $member 'id')
+        if ((Get-CaCDeviceTierProperty $member '@odata.type') -ne '#microsoft.graph.device' -or
+            -not $byId.ContainsKey($id)) {
+            throw "Tier $tier contains a non-device, nested, or unknown member '$id'; review manually."
+        }
+        if ($assigned.ContainsKey($id)) {
+            throw "Device '$id' has duplicate or multiple tier memberships; review manually."
+        }
+        $assigned[$id] = $tag
     }
-
-    $remote = $existing | Select-Object -First 1
-
-    if ($remote) {
-        $existingGroupTypes = @(Get-LocalObjectProperty -InputObject $remote -Name 'groupTypes')
-        if ($existingGroupTypes -contains 'DynamicMembership') {
-            $existingRule = Get-LocalObjectProperty -InputObject $remote -Name 'membershipRule'
-            Write-Host "  already a dynamic group (rule: $existingRule); nothing to do."
-            continue
-        }
-
-        $existingDescription = [string] (Get-LocalObjectProperty -InputObject $remote -Name 'description')
-        if (-not $existingDescription -or $existingDescription -notlike "*$marker*") {
-            Write-Warning "  '$displayName' does not carry the repository managed marker; refusing to delete a group this repository may not own."
-            continue
-        }
-
-        $members = @((& $graphInvoker 'GET' "groups/$($remote.id)/members?`$select=id,displayName" $null).value)
-        if ($members) {
-            Write-Warning "  '$displayName' currently has $($members.Count) manually-added member(s) that will NOT carry over: $((($members | ForEach-Object { $_.displayName }) -join ', ')). Re-tag those devices with Set-CaCAutopilotGroupTag.ps1 after this conversion."
-        }
-
-        if ($PSCmdlet.ShouldProcess("$displayName [$($remote.id)]", 'Delete assigned group (converting to dynamic)')) {
-            & $graphInvoker 'DELETE' "groups/$($remote.id)" $null | Out-Null
-            Write-Host "  deleted assigned group $($remote.id)."
-        }
-        else {
-            continue
-        }
+}
+foreach ($device in $devices) {
+    $id = [string] $device.id
+    $current = Get-CaCDeviceTierTag $device
+    if ($current -and $current -cnotin @('Adult', 'Teen', 'Child')) {
+        throw "Device '$id' has an occupied extensionAttribute1 ('$current'); review manually."
     }
-
-    if ($PSCmdlet.ShouldProcess($displayName, "Create dynamic group with rule: $membershipRule")) {
-        $body = @{
-            displayName                  = $displayName
-            mailNickname                 = [string] $groupSpec.mailNickname
-            description                  = "$($groupSpec.description) $marker".Trim()
-            securityEnabled              = $true
-            mailEnabled                  = $false
-            groupTypes                   = @('DynamicMembership')
-            membershipRule               = $membershipRule
-            membershipRuleProcessingState = 'On'
+    if ($assigned.ContainsKey($id) -and $current -and $current -cne $assigned[$id]) {
+        throw "Device '$id' has a tier tag conflicting with its assigned group; review manually."
+    }
+    if ($current -and -not $assigned.ContainsKey($id)) {
+        $tier = $current.ToLowerInvariant()
+        if (@(Get-CaCDeviceTierProperty $groups[$tier] 'groupTypes') -notcontains 'DynamicMembership') {
+            throw "Tagged device '$id' is outside assigned tier group $tier; review manually before migration."
         }
-
-        $created = & $graphInvoker 'POST' 'groups' $body
-        Write-Host "  created dynamic group $($created.id) with rule: $membershipRule"
     }
 }
 
-Write-Host @'
-
-Next steps:
-  1. Every device that must land in one of these groups needs to be Autopilot-registered with the
-     matching Group Tag (see the table in docs/enterprise-child-enrollment.md). For an
-     already-registered device, use Set-CaCAutopilotGroupTag.ps1.
-  2. Dynamic group processing is not instant - allow up to a few minutes to a few hours for large
-     tenants, though a family-sized tenant is normally fast.
-  3. Re-run the deploy plan afterwards: the LAPS and tier-specific policy assignments will show as
-     Update (re-pointing at the new group ids), not Create - this is expected and safe.
-'@
+$missing = @($assigned.Keys | Where-Object { -not (Get-CaCDeviceTierTag $byId[$_]) } | Sort-Object)
+$pending = @($tiers | Where-Object { @(Get-CaCDeviceTierProperty $groups[$_] 'groupTypes') -notcontains 'DynamicMembership' })
+$target = "all three device-tier groups ($($pending.Count) assigned), $($missing.Count) device tags"
+if (-not $PSCmdlet.ShouldProcess($target, 'Stamp and verify all missing tags, then convert existing group IDs to dynamic membership')) {
+    [pscustomobject]@{ Status = 'WhatIf'; PendingGroups = $pending.Count; PendingTags = $missing.Count }
+    return
+}
+foreach ($id in $missing) {
+    & $graph 'PATCH' "devices/$id" @{ extensionAttributes = @{ extensionAttribute1 = $assigned[$id] } } | Out-Null
+    $readback = & $graph 'GET' "devices/${id}?`$select=id,extensionAttributes" $null
+    if ([string] (Get-CaCDeviceTierProperty $readback 'id') -ne $id -or
+        (Get-CaCDeviceTierTag $readback) -cne $assigned[$id]) {
+        throw "Device '$id' tag write was not verified; no groups have been changed. Inspect and rerun."
+    }
+}
+foreach ($tier in $pending) {
+    $id = [string] $groups[$tier].id
+    & $graph 'PATCH' "groups/$id" @{
+        groupTypes = @('DynamicMembership')
+        membershipRule = $rules[$tier]
+        membershipRuleProcessingState = 'On'
+    } | Out-Null
+    $readback = & $graph 'GET' "groups/${id}?`$select=id,groupTypes,membershipRule,membershipRuleProcessingState" $null
+    if ([string] $readback.id -ne $id -or
+        @(Get-CaCDeviceTierProperty $readback 'groupTypes') -notcontains 'DynamicMembership' -or
+        [string] $readback.membershipRule -cne $rules[$tier] -or
+        [string] $readback.membershipRuleProcessingState -cne 'On') {
+        throw "Group '$tier' conversion was not verified. Inspect and rerun; no rollback was attempted."
+    }
+}
+[pscustomobject]@{
+    Status = 'ConfigurationVerifiedMembershipPending'
+    GroupIds = @($tiers | ForEach-Object { [string] $groups[$_].id })
+    TaggedDevices = $missing.Count
+    ConvertedGroups = $pending.Count
+}

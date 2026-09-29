@@ -80,12 +80,44 @@ Describe 'Repository configuration' {
         }
     }
 
-    It 'defines one manually managed device group for each age tier' {
+    It 'types every device-scoped group as a device group the engine never populates' {
         $deviceGroups = @($script:Config.Groups | Where-Object {
             $_ -is [hashtable] -and $_.ContainsKey('memberType') -and $_['memberType'] -eq 'device'
         })
-        @($deviceGroups | ForEach-Object { $_['displayName'] }) | Should -Be @('CaC-Devices-Adult', 'CaC-Devices-Teen', 'CaC-Devices-Child')
+
+        @($deviceGroups | ForEach-Object { $_['id'] }) | Should -HaveCount 6
         @($deviceGroups | ForEach-Object { $_['members'] }) | Should -BeNullOrEmpty
+    }
+
+    It 'defines one Entra-maintained device group for each age tier' {
+        $tierDeviceGroupIds = @('sg-devices-adult', 'sg-devices-teen', 'sg-devices-child')
+        $tierDeviceGroups = @($tierDeviceGroupIds | ForEach-Object {
+            $id = $_
+            $script:Config.Groups | Where-Object { $_['id'] -eq $id }
+        })
+
+        @($tierDeviceGroups | ForEach-Object { $_['displayName'] }) |
+            Should -Be @('CaC-Devices-Adult', 'CaC-Devices-Teen', 'CaC-Devices-Child')
+        @($tierDeviceGroups | ForEach-Object { $_['memberType'] }) | Should -Be @('device', 'device', 'device')
+        @($tierDeviceGroups | ForEach-Object { $_['members'] }) | Should -BeNullOrEmpty
+    }
+
+    It 'types the three assigned Autopilot device preparation groups as device groups' {
+        $prepGroupIds = @(
+            'sg-autopilot-device-preparation-adult'
+            'sg-autopilot-device-preparation-teen'
+            'sg-autopilot-device-preparation-child'
+        )
+        $prepGroups = @($prepGroupIds | ForEach-Object {
+            $id = $_
+            $script:Config.Groups | Where-Object { $_['id'] -eq $id }
+        })
+
+        $prepGroups | Should -HaveCount 3
+        @($prepGroups | ForEach-Object { $_['memberType'] }) | Should -Be @('device', 'device', 'device')
+        @($prepGroups | ForEach-Object { $_['membership'].source }) |
+            Should -Be @('explicit', 'explicit', 'explicit')
+        @($prepGroups | ForEach-Object { $_['members'] }) | Should -BeNullOrEmpty
     }
 
     It 'places Samantha in the adult tier' {
@@ -130,8 +162,17 @@ Describe 'Repository configuration' {
         $script:Config.Apps.Count | Should -BeGreaterThan 0
         $allowedAssignmentGroups = @('sg-tier-child', 'sg-nuclear-family')
         foreach ($app in $script:Config.Apps) {
+            # Defender is the one app that also targets the child device group, so a child device
+            # keeps MDE (and therefore the GSA tunnel) even if its owner's user tier changes.
+            $allowed = if ($app.id -eq 'android-defender') {
+                $allowedAssignmentGroups + 'sg-devices-child'
+            }
+            else {
+                $allowedAssignmentGroups
+            }
+
             foreach ($assignment in $app.assignments) {
-                $assignment.group | Should -BeIn $allowedAssignmentGroups
+                $assignment.group | Should -BeIn $allowed
             }
         }
 
@@ -146,7 +187,9 @@ Describe 'Repository configuration' {
         $iosAssignmentCount = ($script:Config.Apps | Where-Object platform -EQ 'ios' |
             ForEach-Object { @($_.assignments).Count } | Measure-Object -Sum).Sum
         $iosAssignmentCount | Should -Be 0
-        ($script:Config.Apps | Where-Object id -EQ 'android-defender').assignments.intent | Should -Be @('required')
+        $defender = $script:Config.Apps | Where-Object id -EQ 'android-defender'
+        @($defender.assignments.group) | Should -Be @('sg-tier-child', 'sg-devices-child')
+        @($defender.assignments.intent) | Should -Be @('required', 'required')
     }
 
     It 'keeps Windows update rings out of the adult tier' {
