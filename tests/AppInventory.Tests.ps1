@@ -23,6 +23,13 @@ Describe 'Read-only child Android GSA inventory' {
                 'deviceAppManagement/mobileAppConfigurations/gsa-id/assignments' {
                     return @{ value = @(@{ target = @{ groupId = 'user-group'; '@odata.type' = '#microsoft.graph.groupAssignmentTarget' } }) }
                 }
+                'deviceAppManagement/mobileAppConfigurations/gsa-id' {
+                    return @{
+                        id = 'gsa-id'; packageId = 'com.microsoft.scmx'; targetedMobileApps = @('defender-id')
+                        payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+                            '{"managedProperty":[{"key":"Global Secure Access","valueString":"3"},{"key":"GlobalSecureAccessPrivateChannel","valueString":"0"}]}'))
+                    }
+                }
                 'deviceAppManagement/mobileAppConfigurations/gsa-id/deviceStatuses' {
                     return @{ value = @(@{ status = 'compliant'; deviceDisplayName = 'PRIVATE-NAME'; id = 'PRIVATE-DEVICE-ID' }) }
                 }

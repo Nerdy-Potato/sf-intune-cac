@@ -144,8 +144,8 @@ if ($IncludeChildGsa) {
         (& $getProperty $_ 'displayName') -eq $gsaConfig.payload.displayName
     })
     if ($matches.Count -ne 1) { throw 'Expected exactly one live child Defender/GSA app configuration.' }
-    $gsa = $matches[0]
-    $gsaId = & $getProperty $gsa 'id'
+    $gsaId = & $getProperty $matches[0] 'id'
+    $gsa = & $graphInvoker 'GET' "deviceAppManagement/mobileAppConfigurations/$gsaId" $null
     $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(
         [string] (& $getProperty $gsa 'payloadJson'))) | ConvertFrom-Json -AsHashtable
     $settings = foreach ($key in @('Global Secure Access', 'GlobalSecureAccessPrivateChannel')) {
@@ -176,12 +176,16 @@ if ($IncludeChildGsa) {
         Where-Object { $_ })
     $statusCounts = @($statuses | Group-Object -Property { & $getProperty $_ 'status' } |
         ForEach-Object { [pscustomobject]@{ Status = $_.Name; Count = $_.Count } })
+    $targetIds = @(& $getProperty $gsa 'targetedMobileApps')
     $defenderPolicyCount = @($remoteConfigurations | Where-Object {
-        (& $getProperty $_ 'packageId') -eq 'com.microsoft.scmx'
+        (& $getProperty $_ 'packageId') -eq 'com.microsoft.scmx' -or
+        @((& $getProperty $_ 'targetedMobileApps') | Where-Object { $_ -in $targetIds }).Count -gt 0
     }).Count
     Write-Host '--- Child Android GSA (read-only, no device/user identifiers) ---'
     [pscustomobject]@{
         Settings = @($settings)
+        PayloadShape = @($decoded.Keys)
+        ManagedPropertyKeys = @($decoded.managedProperty | ForEach-Object { & $getProperty $_ 'key' })
         Assignments = @($coverage)
         ExclusionCount = @($assignments | Where-Object {
             (& $getProperty (& $getProperty $_ 'target') '@odata.type') -eq '#microsoft.graph.exclusionGroupAssignmentTarget'
