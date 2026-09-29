@@ -892,6 +892,17 @@ Describe 'Enrolling-user local admin remediation' {
         $script:RemediationWorkflow | Should -Match 'New-CaCLocalAdminRemediationScript\.ps1'
     }
 
+    It 'keeps tier deployment as the default and requires explicit confirmation for one-device recovery' {
+        $script:RemediationWorkflow | Should -Match "(?s)mode:.*?default: 'tiers'.*?single-device-recovery"
+        $script:RemediationWorkflow | Should -Match 'RECOVERY_DEVICE_NAME:\s*\$\{\{\s*inputs\.device_name\s*\}\}'
+        $script:RemediationWorkflow | Should -Match 'RECOVERY_USER_PRINCIPAL_NAME:\s*\$\{\{\s*inputs\.user_principal_name\s*\}\}'
+        $script:RemediationWorkflow | Should -Match 'RECOVERY_CONFIRM:\s*\$\{\{\s*inputs\.confirm\s*\}\}'
+        $script:RemediationWorkflow | Should -Match "(?s)RECOVERY_CONFIRM -eq 'true'.*?New-CaCDeviceLocalAdminRecovery\.ps1.*?else\s*\{.*?New-CaCDeviceLocalAdminRecovery\.ps1.*?-WhatIf"
+        $deployStep = ($script:RemediationWorkflow -split '- name: Deploy proactive remediation', 2)[1]
+        $runBlock = ($deployStep -split '(?m)^\s*run:\s*\|\s*', 2)[1]
+        $runBlock | Should -Not -Match '\$\{\{\s*inputs\.'
+    }
+
     It 'creates a new proactive remediation and assigns it with an hourly schedule when none exists' {
         $scriptPath = Join-Path $script:RepoRoot 'scripts/bootstrap/New-CaCLocalAdminRemediationScript.ps1'
         $capturedCalls = [System.Collections.Generic.List[object]]::new()

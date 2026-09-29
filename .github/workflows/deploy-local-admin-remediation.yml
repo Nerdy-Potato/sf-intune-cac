@@ -3,11 +3,35 @@ name: Deploy local admin remediation
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Deployment mode'
+        type: choice
+        required: true
+        default: 'tiers'
+        options:
+          - tiers
+          - single-device-recovery
       tiers:
         description: 'Comma-separated tiers to assign this remediation to (adult, teen)'
         type: string
         required: true
         default: 'adult,teen'
+      device_name:
+        description: 'Exact Windows managed-device name (single-device-recovery only)'
+        type: string
+        required: false
+      user_principal_name:
+        description: 'Exact enabled member user UPN to add (single-device-recovery only)'
+        type: string
+        required: false
+      confirm:
+        description: 'Set true to apply recovery; otherwise run a read-only WhatIf preview'
+        type: choice
+        required: true
+        default: 'false'
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: read
@@ -42,9 +66,38 @@ jobs:
         env:
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+          REMEDIATION_MODE: ${{ inputs.mode }}
+          REMEDIATION_TIERS: ${{ inputs.tiers }}
+          RECOVERY_DEVICE_NAME: ${{ inputs.device_name }}
+          RECOVERY_USER_PRINCIPAL_NAME: ${{ inputs.user_principal_name }}
+          RECOVERY_CONFIRM: ${{ inputs.confirm }}
         run: |
+          if ($env:REMEDIATION_MODE -eq 'single-device-recovery') {
+            if ([string]::IsNullOrWhiteSpace($env:RECOVERY_DEVICE_NAME) -or
+                [string]::IsNullOrWhiteSpace($env:RECOVERY_USER_PRINCIPAL_NAME)) {
+              throw 'single-device-recovery requires both device_name and user_principal_name.'
+            }
+
+            $recoveryArgs = @{
+              DeviceName = $env:RECOVERY_DEVICE_NAME
+              UserPrincipalName = $env:RECOVERY_USER_PRINCIPAL_NAME
+            }
+            if ($env:RECOVERY_CONFIRM -eq 'true') {
+              ./scripts/bootstrap/New-CaCDeviceLocalAdminRecovery.ps1 @recoveryArgs -Confirm:$false
+            }
+            else {
+              Write-Host 'Recovery confirmation is false; running read-only WhatIf preview. No tenant writes will be made.'
+              ./scripts/bootstrap/New-CaCDeviceLocalAdminRecovery.ps1 @recoveryArgs -WhatIf -Confirm:$false
+            }
+            return
+          }
+
+          if ($env:REMEDIATION_MODE -ne 'tiers') {
+            throw "Unsupported deployment mode '$env:REMEDIATION_MODE'."
+          }
+
           $tiers = @(
-            '${{ inputs.tiers }}'.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries) |
+            $env:REMEDIATION_TIERS.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries) |
               ForEach-Object { $_.Trim() } |
               Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
           )

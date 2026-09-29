@@ -69,6 +69,59 @@ profile's **User account type = Administrator** setting, not by these dynamic de
 joining adult/teen user is not a local admin immediately after Autopilot completes, check the
 assigned Autopilot deployment profile first; MDM policy sync is not the source of that permission.
 
+### One-device local administrator recovery
+
+For an approved recovery affecting one Windows device and one explicitly selected user, use the
+`single-device-recovery` mode in `deploy-local-admin-remediation.yml` from the reviewed feature
+ref. The workflow keeps `tiers` as its default. With `confirm=false` it runs a Graph-read-only
+`-WhatIf` preview; only `confirm=true` permits writes, still behind the `production` environment and
+the existing apply OIDC identity. This recovery does not change Entra roles, re-enroll the device,
+or assign a policy to a user or tier.
+
+Before enabling the workflow identity, confirm that its Microsoft Graph application permissions
+are already granted: `DeviceManagementManagedDevices.Read.All` to resolve the Intune device,
+`Device.Read.All` and `User.Read.All` to resolve the linked Entra device and selected user,
+`Group.ReadWrite.All`, `GroupMember.ReadWrite.All`, and `Device.ReadWrite.All` to create and
+populate the static security device group, and `DeviceManagementConfiguration.ReadWrite.All` to
+create, inspect, and assign the custom configuration. These requirements follow the Microsoft
+Graph permissions tables for [managedDevices](https://learn.microsoft.com/graph/api/intune-devices-manageddevice-list?view=graph-rest-1.0),
+[devices](https://learn.microsoft.com/graph/api/device-list?view=graph-rest-1.0),
+[users](https://learn.microsoft.com/graph/api/user-list?view=graph-rest-1.0),
+[group membership](https://learn.microsoft.com/graph/api/group-post-members?view=graph-rest-1.0),
+and [device configurations](https://learn.microsoft.com/graph/api/intune-deviceconfig-windows10customconfiguration-create?view=graph-rest-1.0).
+This procedure does not add or modify cloud role grants.
+
+Dispatch the feature ref with the exact device name and UPN selected for the recovery; do not put
+personal device or user identifiers in repository files:
+
+```powershell
+gh workflow run deploy-local-admin-remediation.yml `
+  --ref <feature-branch> `
+  -f mode=single-device-recovery `
+  -f device_name='DEVICE_NAME' `
+  -f user_principal_name='USER@TENANT_DOMAIN' `
+  -f confirm=true
+```
+
+The script resolves exactly one Windows Intune managedDevice, follows its `azureADDeviceId` to one
+enabled Entra device object, and requires exactly one enabled member user for the selected UPN. If
+the managed device reports a different user UPN, the operation stops before any write. The created
+policy uses the documented [LocalUsersAndGroups CSP `Configure`](https://learn.microsoft.com/windows/client-management/mdm/policy-csp-localusersandgroups#configure)
+OMA-URI and its `U` (Update) action,
+adding only the selected user's Entra SID to built-in Administrators. It is assigned only to a
+deterministic static security group whose sole member is that Entra device object. A same-device
+recovery policy for a different user, an unowned object, extra group members, or any unexpected
+assignment blocks the operation.
+
+After a successful workflow run, trigger an Intune device sync in Company Portal or from Intune
+admin center. Then sign out and sign back in if needed and verify local membership on the endpoint
+(for example, with `Get-LocalGroupMember -Group Administrators`). The script's success means only
+that the group membership and policy assignment were verified in Graph; it does **not** mean that
+the endpoint received the policy or that local membership changed. A separate existing
+LocalUsersAndGroups policy using the `R` (Replace) action for Administrators can override `U`
+(Update) behavior and remove members not listed by that replacing policy. Inspect overlapping
+device assignments before dispatch and resolve any such conflict before relying on the recovery.
+
 ### Stuck Intune app remediation
 
 If a newly created Intune store app remains in Microsoft Graph `publishingState: processing` for
