@@ -178,7 +178,7 @@ if ($IncludeChildGsa) {
         ForEach-Object { [pscustomobject]@{ Status = $_.Name; Count = $_.Count } })
     $targetIds = @(& $getProperty $gsa 'targetedMobileApps')
     $defenderPolicyCount = @($remoteConfigurations | Where-Object {
-        (& $getProperty $_ 'packageId') -eq 'com.microsoft.scmx' -or
+        (& $getProperty $_ 'packageId') -in @('com.microsoft.scmx', 'app:com.microsoft.scmx') -or
         @((& $getProperty $_ 'targetedMobileApps') | Where-Object { $_ -in $targetIds }).Count -gt 0
     }).Count
     Write-Host '--- Child Android GSA (read-only, no device/user identifiers) ---'

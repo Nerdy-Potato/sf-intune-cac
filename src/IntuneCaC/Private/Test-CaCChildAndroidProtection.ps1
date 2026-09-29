@@ -30,7 +30,7 @@ function Test-CaCChildAndroidProtection {
         $payload = $policy.payload
         if (-not $policy.enabled -or $policy.resource -ne 'mobileAppConfigurations' -or
             $payload.'@odata.type' -ne '#microsoft.graph.androidManagedStoreAppConfiguration' -or
-            (Get-CaCProperty $payload 'packageId') -ne 'com.microsoft.scmx' -or
+            (Get-CaCProperty $payload 'packageId') -ne 'app:com.microsoft.scmx' -or
             (Get-CaCProperty $payload 'profileApplicability') -ne 'androidDeviceOwner' -or
             @((Get-CaCProperty $policy 'targetApps')).Count -ne 1 -or
             @((Get-CaCProperty $policy 'targetApps'))[0] -ne 'android-defender' -or

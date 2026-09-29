@@ -82,6 +82,12 @@ Describe 'Mandatory child Android GSA protection' {
         $script:Vpn.payload.vpnAlwaysOnLockdownMode = $false
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
     }
+
+    It 'rejects the observed live iOS EnableGSA key on an Android policy' {
+        $script:Gsa.payload.payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+            '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"EnableGSA","valueInteger":3}]}'))
+        @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
+    }
 }
 
 Describe 'Modern LAPS configuration' {
