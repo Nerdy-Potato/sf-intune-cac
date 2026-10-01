@@ -133,6 +133,17 @@ Describe 'Repository configuration' {
         $child.payload.Keys.Count | Should -BeGreaterThan $teen.payload.Keys.Count
     }
 
+    It 'lets teens install Windows apps from outside the Microsoft Store but keeps children Store-only' {
+        $child = $script:Config.Policies | Where-Object name -EQ 'windows-restrictions-child'
+        $teen = $script:Config.Policies | Where-Object name -EQ 'windows-restrictions-teen'
+
+        $teen.payload.smartScreenEnableAppInstallControl | Should -BeFalse
+        $teen.payload.appsAllowTrustedAppsSideloading | Should -Be 'notConfigured'
+        $teen.payload.edgeRequireSmartScreen | Should -BeTrue
+        $child.payload.smartScreenEnableAppInstallControl | Should -BeTrue
+        $child.payload.appsAllowTrustedAppsSideloading | Should -Be 'blocked'
+    }
+
     It 'always exposes group membership as an array, even for empty or single member tiers' {
         foreach ($group in $script:Config.Groups) {
             , $group.members | Should -BeOfType [System.Object[]]

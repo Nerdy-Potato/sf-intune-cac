@@ -14,7 +14,9 @@ parents, because a compromised adult account is worse than a compromised child a
 The difference between tiers is visible in the policies themselves - for example
 `windows-restrictions-child` blocks the Microsoft Store so that software can only arrive through an
 explicitly approved Intune app assignment, while `windows-restrictions-teen` allows it and keeps
-only the security-relevant settings.
+only the security-relevant settings. Teens can also install apps from outside the Store: SmartScreen
+app install control ("Microsoft Store only") is off and trusted-app sideloading is left unconfigured,
+while SmartScreen still warns on unrecognised downloads.
 
 ## No ages are stored
 
