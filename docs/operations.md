@@ -96,6 +96,35 @@ retires them deliberately, under an explicit and audited change:
   Revoke the obsolete grants manually once no caller remains, and re-consent the applications so
   the live consent matches `bootstrap/New-CaCGitHubIdentity.ps1` - see
   [bootstrap.md](bootstrap.md).
+
+#### Retiring the portal recovery policies
+
+`Recover Adult Admin` and `Recover Teen Admin` were created by hand in the Intune portal. Each one
+adds a whole tier user group (`CaC-Tier-Adult` / `CaC-Tier-Teen`) to local Administrators on every
+device in the matching tier device group - the broad grant this design rules out. Because they carry
+no managed marker, `Remove-CaCOrphanConfigurationPolicy.ps1` refuses them. Retire them with the
+**Retire local admin recovery policies** workflow instead:
+
+```powershell
+gh workflow run retire-local-admin-recovery-policies.yml -f policy='Both' -f confirm=true
+```
+
+It runs `scripts/bootstrap/Remove-CaCLocalAdminRecoveryPolicy.ps1` under the apply identity, in the
+`production` environment. It accepts only those two exact names. Before deleting anything it proves
+that every selected policy is unique by name and contains exactly one setting, which adds
+(Update, never Replace) exactly the live tier user group's SID to local Administrators. If any
+selected policy fails that check, nothing is deleted.
+
+Before you run it, make sure each Adult/Teen Windows device has an enrollment-time grant to fall
+back on. The registering-users scope and device preparation apply **only when a device joins**. A
+device that was joined before the scope was set, or joined without device preparation, never
+received one. Its user is an administrator only because of the recovery policy. Re-provision such
+devices through Autopilot device preparation, signing in as their own user, before you retire the
+policy that covers them. Windows LAPS (`x3nc0n`) remains the break-glass path either way.
+
+Deleting an additive policy neither reliably revokes nor reliably keeps the membership it granted.
+After the next sync, check each affected device with `Get-LocalGroupMember -Group Administrators`.
+
 ### Verifying child Defender and Global Secure Access coverage
 
 The **Inventory Intune apps** workflow runs
