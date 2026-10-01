@@ -37,7 +37,11 @@
     "2026-09-29: Consolidated modern Windows LAPS into 'CaC - Windows LAPS - Account Management'.",
     "The legacy ADMX_AdmPwd policy (laps.json) is retained as transition-only scaffolding: removing",
     "it would schedule an orphan deletion of the live legacy policy before modern password backup to",
-    "Entra ID is verified on a representative device. Retire both together, later, under review."
+    "Entra ID is verified on a representative device. Retire both together, later, under review.",
+    "2026-10-01: Added the 'Retire local admin recovery policies' workflow to delete the",
+    "portal-created 'Recover Adult Admin' / 'Recover Teen Admin' tier-group grants after proving",
+    "their exact shape. Devices joined before the registering-users scope must be re-provisioned",
+    "through device preparation first - see docs/operations.md."
   ],
   "adoption": {
     "oneTime": true,

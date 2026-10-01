@@ -1,0 +1,72 @@
+name: Retire local admin recovery policies
+
+# Deletes the portal-created "Recover Adult Admin" / "Recover Teen Admin" Settings Catalog policies
+# after proving each one only adds its tier user group to local Administrators. See
+# docs/operations.md before running: endpoint membership must be verified afterwards.
+
+on:
+  workflow_dispatch:
+    inputs:
+      policy:
+        description: 'Which recovery policy to retire'
+        type: choice
+        required: true
+        default: 'Both'
+        options:
+          - 'Both'
+          - 'Recover Adult Admin'
+          - 'Recover Teen Admin'
+      confirm:
+        description: 'Explicitly confirm deletion of the selected recovery policies'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retire-local-admin-recovery-policies
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    name: Delete verified local admin recovery policies
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require explicit confirmation
+        shell: pwsh
+        run: |
+          if ('${{ inputs.confirm }}' -ne 'true') {
+            throw 'Recovery policy retirement requires confirm=true.'
+          }
+
+      - name: Check tenant identity is configured
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+        run: |
+          if (-not $env:AZURE_TENANT_ID -or -not $env:AZURE_CLIENT_ID) {
+            throw 'AZURE_TENANT_ID and AZURE_APPLY_CLIENT_ID repository variables must be set.'
+          }
+
+      - name: Retire recovery policies
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+          POLICY: ${{ inputs.policy }}
+        run: |
+          $names = if ($env:POLICY -eq 'Both') {
+            @('Recover Adult Admin', 'Recover Teen Admin')
+          } else {
+            @($env:POLICY)
+          }
+          ./scripts/bootstrap/Remove-CaCLocalAdminRecoveryPolicy.ps1 -Name $names -Confirm:$false
