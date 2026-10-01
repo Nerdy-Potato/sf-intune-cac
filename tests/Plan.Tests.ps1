@@ -739,21 +739,111 @@ Describe 'New-CaCPlan' {
         }
     }
 
-    Context 'when a member joins a tier' {
+    Context 'when manually managed tier group membership differs from config' {
         BeforeAll {
             $script:MemberState = New-FakeTenant -InSync
-            $childGroup = @($script:MemberState.Groups | Where-Object displayName -EQ 'CaC-Tier-Child')[0]
-            $script:MemberState.Members[$childGroup.id] = @($script:MemberState.Members[$childGroup.id] | Select-Object -Skip 1)
+            $script:TierGroups = @($script:Config.Groups | Where-Object membershipManagement -EQ 'manual')
+            foreach ($tierGroup in $script:TierGroups) {
+                $remoteGroup = $script:MemberState.Groups | Where-Object displayName -EQ $tierGroup.displayName
+                $script:MemberState.Members[$remoteGroup.id] = @(
+                    [pscustomobject]@{ id = "manual-$($tierGroup.id)"; userPrincipalName = 'manual.member@example.com' }
+                )
+            }
 
+            $managedGroup = $script:Config.Groups | Where-Object id -EQ 'sg-productivity-all'
+            $managedRemoteGroup = $script:MemberState.Groups | Where-Object displayName -EQ $managedGroup.displayName
+            $script:MemberState.Members[$managedRemoteGroup.id] = @(
+                $script:MemberState.Members[$managedRemoteGroup.id] | Select-Object -Skip 1
+            )
             $script:MemberPlan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $script:MemberState)
         }
 
-        It 'plans the missing membership without touching the policies' {
+        It 'does not read or plan membership changes for any tier group' {
+            foreach ($tierGroup in $script:TierGroups) {
+                $remoteGroup = $script:MemberState.Groups | Where-Object displayName -EQ $tierGroup.displayName
+                @($script:MemberState.Calls | Where-Object {
+                        $_.Uri -eq "groups/$($remoteGroup.id)/members?`$select=id,userPrincipalName"
+                    }) | Should -BeNullOrEmpty
+                @($script:MemberPlan | Where-Object {
+                        $_.Kind -eq 'GroupMembership' -and $_.Target -eq $tierGroup.displayName
+                    }) | Should -BeNullOrEmpty
+            }
+        }
+
+        It 'continues reconciling membership for other managed groups' {
             $membership = @($script:MemberPlan | Where-Object Kind -EQ 'GroupMembership')
             $membership.Count | Should -Be 1
+            $membership[0].Target | Should -Be 'CaC-Productivity-All'
             $membership[0].Details -join ' ' | Should -BeLike '*add:*'
             @($script:MemberPlan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -ne 'NoChange' }) | Should -BeNullOrEmpty
         }
+    }
+
+    It 'creates a missing manually managed tier group without adding members' {
+        $state = New-FakeTenant
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+        $tierCreates = @($plan | Where-Object {
+                $_.Kind -eq 'Group' -and $_.Action -eq 'Create' -and
+                $_.Data.membershipManagement -eq 'manual'
+            })
+
+        $tierCreates | Should -HaveCount 3
+        @($tierCreates | Where-Object { $_.Details -join ' ' -notlike '*membership is manually managed*' }) |
+            Should -BeNullOrEmpty
+
+        $results = Invoke-CaCPlan -Plan $tierCreates -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        @($results | Where-Object { $_.Action -eq 'Create group' -and $_.Status -ne 'Applied' }) |
+            Should -BeNullOrEmpty
+        @($state.Calls | Where-Object { $_.Uri -match '^groups/[^/]+/members/\$ref$' }) |
+            Should -BeNullOrEmpty
+    }
+
+    It 'skips stale membership actions for manually managed tier groups' {
+        $state = New-FakeTenant
+        $staleAction = [pscustomobject]@{
+            Kind   = 'GroupMembership'
+            Action = 'Update'
+            Target = 'CaC-Tier-Child'
+            Data   = [pscustomobject]@{
+                GroupKey = 'sg-tier-child'
+                GroupId  = 'tier-child-id'
+                Add      = @('lucas@spaid.family')
+                Remove   = @()
+            }
+        }
+
+        $results = Invoke-CaCPlan -Plan @($staleAction) -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        $results[0].Status | Should -Be 'Skipped'
+        $results[0].Message | Should -BeLike '*manually managed*'
+        $state.Calls | Should -BeNullOrEmpty
+    }
+
+    It 'does not populate a manually managed group from a stale create action' {
+        $state = New-FakeTenant
+        $staleAction = [pscustomobject]@{
+            Kind   = 'Group'
+            Action = 'Create'
+            Target = 'CaC-Tier-Child'
+            Data   = [pscustomobject]@{
+                id          = 'sg-tier-child'
+                displayName = 'CaC-Tier-Child'
+                mailNickname = 'cac-tier-child'
+                description = 'Child tier'
+                members = @('lucas@spaid.family')
+            }
+        }
+
+        $results = Invoke-CaCPlan -Plan @($staleAction) -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        @($results | Where-Object { $_.Action -eq 'Create group' -and $_.Status -ne 'Applied' }) |
+            Should -BeNullOrEmpty
+        @($state.Calls | Where-Object { $_.Uri -match '^groups/[^/]+/members/\$ref$' }) |
+            Should -BeNullOrEmpty
     }
 
     Context 'RequiresPortalApply propagation for deviceEnrollmentConfigurations' {
@@ -980,10 +1070,10 @@ Describe 'Invoke-CaCPlan' {
         @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
     }
 
-    It 'applies a JSON-round-tripped reviewed plan without rediscovering ids' {
+    It 'applies a JSON-round-tripped managed-group membership plan without rediscovering ids' {
         $planState = New-FakeTenant -InSync
-        $childGroup = @($planState.Groups | Where-Object displayName -EQ 'CaC-Tier-Child')[0]
-        $planState.Members[$childGroup.id] = @($planState.Members[$childGroup.id] | Select-Object -Skip 1)
+        $managedGroup = @($planState.Groups | Where-Object displayName -EQ 'CaC-Productivity-All')[0]
+        $planState.Members[$managedGroup.id] = @($planState.Members[$managedGroup.id] | Select-Object -Skip 1)
         $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $planState)
         $roundTripped = $plan | ConvertTo-Json -Depth 50 | ConvertFrom-Json
 

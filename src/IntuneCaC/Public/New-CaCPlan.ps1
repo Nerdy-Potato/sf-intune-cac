@@ -72,9 +72,15 @@ function New-CaCPlan {
         $remote = $groupCandidates | Select-Object -First 1
 
         if (-not $remote) {
-            Add-Action -Kind 'Group' -Action 'Create' -Target $group.displayName -Data $group -Details @(
-                "members: $($group.members -join ', ')"
-            )
+            $manualMembership = $group.ContainsKey('membershipManagement') -and
+                $group.membershipManagement -eq 'manual'
+            $createDetails = if ($manualMembership) {
+                @('membership is manually managed and will not be populated by this repository')
+            }
+            else {
+                @("members: $($group.members -join ', ')")
+            }
+            Add-Action -Kind 'Group' -Action 'Create' -Target $group.displayName -Data $group -Details $createDetails
             continue
         }
 
@@ -124,6 +130,13 @@ function New-CaCPlan {
 
         if ($group.ContainsKey('memberType') -and $group.memberType -eq 'device') {
             Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group -ObjectId $remote.id
+            continue
+        }
+
+        if ($group.ContainsKey('membershipManagement') -and $group.membershipManagement -eq 'manual') {
+            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group -ObjectId $remote.id -Details @(
+                'membership is manually managed and is not reconciled by this repository'
+            )
             continue
         }
 

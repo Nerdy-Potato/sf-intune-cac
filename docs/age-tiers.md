@@ -35,18 +35,22 @@ permanent.
 
 No tier confirmations are currently pending.
 
-## Moving somebody up a tier
+## Changing somebody's recorded tier
 
-Birthdays are a normal, reviewed change:
+The `tier` in `config/identity/users.json` is account metadata. The repository does not manage live
+membership of `CaC-Tier-Adult`, `CaC-Tier-Teen`, or `CaC-Tier-Child`; those groups are maintained
+manually in Entra. Changing a record here does not add or remove anyone from those groups or change
+which tier policies apply to them.
 
-1. Edit that person's `tier` in `config/identity/users.json` (and set `ageTierConfirmed` to `true`).
-2. Open a pull request. The plan will show them being removed from one group and added to another.
-3. Review what that actually unlocks - the group change is one line, but it can move a device from
-   the child restriction profile to the teen one. Read the whole plan, not just the membership diff.
-4. Merge, approve the deployment.
+1. Edit that person's `tier` in `config/identity/users.json` (and set `ageTierConfirmed` to `true`)
+   to keep the repository's account metadata accurate.
+2. Manage any corresponding live tier-group membership separately in Entra using the tenant's
+   approved manual process. Review the policy changes that membership causes before relying on
+   them.
 
-Nothing else needs editing. Group membership is calculated from the tier, so the tier is the only
-place that knowledge lives.
+The config-as-code planner may still manage these group objects and their policy assignment
+references, but it neither reads nor reconciles their membership. Changes to `users.json` alone
+therefore cannot change live tier-group membership.
 
 The child tier also owns an explicit app catalog. Defender, authentication, and the approved Microsoft
 365 apps are required; Edge remains available for self-service installation. Adding any other app is

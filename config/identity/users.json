@@ -4,7 +4,7 @@
     "Source of truth for account metadata and age-tier placement.",
     "No dates of birth or other personal data are stored here - only the tier a person belongs to.",
     "Accounts are NOT created by this repository; they already exist in the tenant.",
-    "This file drives static membership of the tier security groups in groups.json.",
+    "Tier is account metadata only; static membership of tier security groups is manually managed in Entra.",
     "Where an age tier has not been confirmed by a tenant owner, the account is placed in the",
     "MOST restrictive tier that still fits ('child') and ageTierConfirmed is set to false.",
     "Loosening a tier is a deliberate, reviewable change - never a default."

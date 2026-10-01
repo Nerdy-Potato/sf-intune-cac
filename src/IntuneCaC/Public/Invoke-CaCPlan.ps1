@@ -282,6 +282,13 @@ function Invoke-CaCPlan {
         if (-not $PSCmdlet.ShouldProcess($action.Target, 'Create security group')) { continue }
 
         $group = $action.Data
+        $groupId = Get-CaCProperty -InputObject $group -Name 'id'
+        $configuredGroup = @($Configuration.Groups | Where-Object {
+                $_.id -eq $groupId -or $_.displayName -eq $action.Target
+            } | Select-Object -First 1)
+        $manualMembership = $configuredGroup.Count -gt 0 -and
+            (Test-CaCHasProperty -InputObject $configuredGroup[0] -Name 'membershipManagement') -and
+            (Get-CaCProperty -InputObject $configuredGroup[0] -Name 'membershipManagement') -eq 'manual'
         $operation = Invoke-CaCAction -Action 'Create group' -Target $group.displayName -Operation {
             $created = & $GraphInvoker 'POST' 'groups' @{
                 displayName     = $group.displayName
@@ -293,10 +300,12 @@ function Invoke-CaCPlan {
             }
             if (-not $created.id) { throw 'Graph did not return an id for the created group.' }
 
-            foreach ($member in $group.members) {
-                & $GraphInvoker 'POST' "groups/$($created.id)/members/`$ref" @{
-                    '@odata.id' = "https://graph.microsoft.com/v1.0/directoryObjects/$(Resolve-UserId -Upn $member)"
-                } | Out-Null
+            if (-not $manualMembership) {
+                foreach ($member in $group.members) {
+                    & $GraphInvoker 'POST' "groups/$($created.id)/members/`$ref" @{
+                        '@odata.id' = "https://graph.microsoft.com/v1.0/directoryObjects/$(Resolve-UserId -Upn $member)"
+                    } | Out-Null
+                }
             }
 
             return $created
@@ -309,10 +318,28 @@ function Invoke-CaCPlan {
         $created = $operation.Value
         $groupObjectIds[$group.id] = $created.id
 
-        Add-Result -Action 'Create group' -Target $group.displayName -Status 'Applied' -Message "$($group.members.Count) member(s)"
+        $message = if ($manualMembership) {
+            'created; membership remains manually managed'
+        }
+        else {
+            "$($group.members.Count) member(s)"
+        }
+        Add-Result -Action 'Create group' -Target $group.displayName -Status 'Applied' -Message $message
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'GroupMembership' })) {
+        $groupKey = if ($action.Data) { Get-CaCProperty -InputObject $action.Data -Name 'GroupKey' }
+        $manuallyManagedGroup = @($Configuration.Groups | Where-Object {
+                (Test-CaCHasProperty -InputObject $_ -Name 'membershipManagement') -and
+                (Get-CaCProperty -InputObject $_ -Name 'membershipManagement') -eq 'manual' -and
+                ($_.id -eq $groupKey -or $_.displayName -eq $action.Target)
+            })
+        if ($manuallyManagedGroup.Count -gt 0) {
+            Add-Result -Action 'Update membership' -Target $action.Target -Status 'Skipped' `
+                -Message 'membership is manually managed and is not reconciled by this repository'
+            continue
+        }
+
         if ($blockedGroupNames.ContainsKey($action.Target) -or
             ($action.Data -and $action.Data.GroupKey -and $blockedGroupIds.ContainsKey($action.Data.GroupKey))) {
             Add-Result -Action 'Update membership' -Target $action.Target -Status 'Failed' `
