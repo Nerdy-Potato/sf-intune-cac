@@ -14,7 +14,7 @@ Describe 'Mandatory child Android GSA protection' {
     It 'forces main GSA on (integer 3), turns unused Private Access off (integer 0) and requires device-tier protection' {
         $settings = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($script:Gsa.payload.payloadJson)) |
             ConvertFrom-Json -AsHashtable
-        $settings.managedProperty.key | Should -Be @('Global Secure Access', 'GlobalSecureAccessPrivateChannel')
+        $settings.managedProperty.key | Should -Be @('EnableGSA', 'GlobalSecureAccessPrivateChannel')
         $settings.managedProperty.valueInteger | Should -Be @(3, 0)
         foreach ($property in $settings.managedProperty) {
             @($property.Keys | Where-Object { $_ -like 'value*' }) | Should -Be @('valueInteger')
@@ -29,17 +29,17 @@ Describe 'Mandatory child Android GSA protection' {
     }
 
     It 'rejects <Key> = <Field>:<Value>' -ForEach @(
-        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 0 }
-        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 1 }
-        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 2 }
+        @{ Key = 'EnableGSA'; Field = 'valueInteger'; Value = 0 }
+        @{ Key = 'EnableGSA'; Field = 'valueInteger'; Value = 1 }
+        @{ Key = 'EnableGSA'; Field = 'valueInteger'; Value = 2 }
         @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueInteger'; Value = 1 }
         @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueInteger'; Value = 2 }
         @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueInteger'; Value = 3 }
-        @{ Key = 'Global Secure Access'; Field = 'valueString'; Value = '3' }
+        @{ Key = 'EnableGSA'; Field = 'valueString'; Value = '3' }
         @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueString'; Value = '0' }
-        @{ Key = 'Global Secure Access'; Field = 'valueBool'; Value = $true }
-        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 3.0 }
-        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = '3' }
+        @{ Key = 'EnableGSA'; Field = 'valueBool'; Value = $true }
+        @{ Key = 'EnableGSA'; Field = 'valueInteger'; Value = 3.0 }
+        @{ Key = 'EnableGSA'; Field = 'valueInteger'; Value = '3' }
     ) {
         $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($script:Gsa.payload.payloadJson)) |
             ConvertFrom-Json -AsHashtable
@@ -61,10 +61,10 @@ Describe 'Mandatory child Android GSA protection' {
         switch ($Mutation) {
             'missing-main' { $decoded.managedProperty = @($decoded.managedProperty[1]) }
             'missing-private' { $decoded.managedProperty = @($decoded.managedProperty[0]) }
-            'duplicate' { $decoded.managedProperty += @{ key = 'Global Secure Access'; valueInteger = 3 } }
+            'duplicate' { $decoded.managedProperty += @{ key = 'EnableGSA'; valueInteger = 3 } }
             'competing' { $decoded.managedProperty[0].valueString = '3' }
-            'case' { $decoded.managedProperty[0].key = 'global secure access' }
-            'whitespace' { $decoded.managedProperty[0].key = 'Global Secure Access ' }
+            'case' { $decoded.managedProperty[0].key = 'enablegsa' }
+            'whitespace' { $decoded.managedProperty[0].key = 'EnableGSA ' }
             'product' { $decoded.productId = 'app:com.microsoft.emmx' }
             'kind' { $decoded.kind = 'other' }
             'legacy-pa' { $decoded.managedProperty += @{ key = 'GlobalSecureAccessPA'; valueInteger = 0 } }
@@ -77,7 +77,7 @@ Describe 'Mandatory child Android GSA protection' {
 
     It 'accepts the contract regardless of managedProperty order' {
         $script:Gsa.payload.payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
-            '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"GlobalSecureAccessPrivateChannel","valueInteger":0},{"key":"Global Secure Access","valueInteger":3}]}'))
+            '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"GlobalSecureAccessPrivateChannel","valueInteger":0},{"key":"EnableGSA","valueInteger":3}]}'))
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa') | Should -BeNullOrEmpty
     }
 
@@ -115,9 +115,9 @@ Describe 'Mandatory child Android GSA protection' {
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
     }
 
-    It 'rejects the observed live iOS EnableGSA key on an Android policy' {
+    It 'rejects the observed regression using a display label instead of the native EnableGSA key' {
         $script:Gsa.payload.payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
-            '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"EnableGSA","valueInteger":3}]}'))
+            '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"Global Secure Access","valueInteger":3},{"key":"GlobalSecureAccessPrivateChannel","valueInteger":0}]}'))
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
     }
 }

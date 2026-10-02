@@ -854,7 +854,7 @@ function Invoke-CaCPlan {
             $expectedGroupIds = @($assignments | Where-Object { $_.target['@odata.type'] -eq '#microsoft.graph.groupAssignmentTarget' } |
                 ForEach-Object { [string] $_.target.groupId })
             $readbackErrors = @(Get-CaCChildGsaLiveErrors -GraphInvoker $GraphInvoker -Path $endpoint.Path -PolicyId $policyId `
-                    -ExpectedIncludeGroupIds $expectedGroupIds -SkipPayload)
+                    -ExpectedIncludeGroupIds $expectedGroupIds)
             if ($readbackErrors) {
                 Add-Result -Action 'Assign policy' -Target $action.Target -Status 'Failed' -Message (
                     "post-assign readback does not satisfy the child GSA contract: $($readbackErrors -join ' ')")
@@ -877,7 +877,8 @@ function Invoke-CaCPlan {
             $expectedGroupIds = @($policy.assignments | Where-Object { $_.intent -ne 'exclude' } | ForEach-Object {
                     [string] (Get-CaCAssignmentTarget -Assignment $_ -GroupObjectIds $groupObjectIds).groupId
                 })
-            @(Get-CaCChildGsaLiveErrors -GraphInvoker $GraphInvoker -Path $endpoint.Path -PolicyId $policyId `
+            @((Get-CaCManagedConfigurationSchemaEvidence -GraphInvoker $GraphInvoker).Errors) +
+                @(Get-CaCChildGsaLiveErrors -GraphInvoker $GraphInvoker -Path $endpoint.Path -PolicyId $policyId `
                     -ExpectedIncludeGroupIds $expectedGroupIds)
         }
         catch {

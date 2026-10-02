@@ -171,7 +171,7 @@ if ($IncludeChildGsa) {
             EntryCount = $values.Count
             Matches    = $matchesDesired
         }
-        if ($setting.Key -ceq 'Global Secure Access') { $row.ForcedOn = $matchesDesired }
+        if ($setting.Key -ceq 'EnableGSA') { $row.ForcedOn = $matchesDesired }
         else { $row.PrivateAccessDisabled = $matchesDesired }
         [pscustomobject] $row
     }
@@ -222,7 +222,7 @@ if ($IncludeChildGsa) {
         Note = ('ReportedDeviceStatuses are Intune delivery states, not proof of the on-device GSA toggle; ' +
             "Private Access is intentionally 0. Confirm GSA is on and locked plus VPN lockdown on each device after sync.")
     } | ConvertTo-Json -Depth 8
-    if (-not @($settings | Where-Object { $_.Key -ceq 'Global Secure Access' })[0].ForcedOn) {
+    if (-not @($settings | Where-Object { $_.Key -ceq 'EnableGSA' })[0].ForcedOn) {
         Write-Warning 'Live main GSA is not typed valueInteger 3 (forced on); deploy the reviewed configuration.'
     }
     if ($contractErrors) {

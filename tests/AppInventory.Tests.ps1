@@ -5,10 +5,9 @@ BeforeAll {
 
 Describe 'Read-only child Android GSA inventory' {
     BeforeEach {
-        # Default live fixture: the pre-fix string-typed state (main ignored by Defender).
-        $global:CaCInventoryGsaPayloadJson = '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"Global Secure Access","valueString":"3"},{"key":"GlobalSecureAccessPrivateChannel","valueString":"0"}]}'
+        $global:CaCInventoryGsaPayloadJson = '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"EnableGSA","valueString":"3"},{"key":"GlobalSecureAccessPrivateChannel","valueString":"0"}]}'
         $global:CaCInventorySchemaItems = @(
-            @{ schemaItemKey = 'Global Secure Access'; displayName = 'Global Secure Access'; dataType = 'integer' },
+            @{ schemaItemKey = 'EnableGSA'; displayName = 'Global Secure Access'; dataType = 'integer' },
             @{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; displayName = 'Private Access'; dataType = 'integer' },
             @{ schemaItemKey = 'antiphishing'; displayName = 'Web protection'; dataType = 'integer' }
         )
@@ -24,7 +23,7 @@ Describe 'Read-only child Android GSA inventory' {
                         id = 'gsa-id'; displayName = 'CaC - Android - Defender and GSA (Child)'
                         packageId = 'com.microsoft.scmx'
                         payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
-                            '{"managedProperty":[{"key":"Global Secure Access","valueString":"3"},{"key":"GlobalSecureAccessPrivateChannel","valueString":"0"}]}'))
+                            '{"managedProperty":[{"key":"EnableGSA","valueString":"3"},{"key":"GlobalSecureAccessPrivateChannel","valueString":"0"}]}'))
                     }) }
                 }
                 'deviceAppManagement/mobileAppConfigurations/gsa-id/assignments' {
@@ -75,7 +74,7 @@ Describe 'Read-only child Android GSA inventory' {
     }
 
     It 'reports the typed contract (main 3 forced, Private Access 0 off) as satisfied, not as a loss' {
-        $global:CaCInventoryGsaPayloadJson = '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"Global Secure Access","valueInteger":3},{"key":"GlobalSecureAccessPrivateChannel","valueInteger":0}]}'
+        $global:CaCInventoryGsaPayloadJson = '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"EnableGSA","valueInteger":3},{"key":"GlobalSecureAccessPrivateChannel","valueInteger":0}]}'
         $warnings = @()
         $output = & (Join-Path $script:Root 'scripts/bootstrap/Get-CaCAppInventory.ps1') `
             -TenantId 'test-tenant' -ClientId 'test-client' -IncludeChildGsa -WarningAction SilentlyContinue -WarningVariable warnings |
@@ -88,7 +87,7 @@ Describe 'Read-only child Android GSA inventory' {
 
     It 'warns with schema evidence when the live schema does not confirm the key/type contract' -ForEach @(
         @{ Items = $null }
-        @{ Items = @(@{ schemaItemKey = 'EnableGSA'; displayName = 'Global Secure Access'; dataType = 'integer' }) }
+        @{ Items = @(@{ schemaItemKey = 'Global Secure Access'; displayName = 'Global Secure Access'; dataType = 'integer' }) }
     ) {
         $global:CaCInventorySchemaItems = $Items
         $warnings = @()

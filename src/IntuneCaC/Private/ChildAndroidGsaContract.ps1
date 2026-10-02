@@ -1,13 +1,5 @@
-# Typed contract for the child Android Defender/Global Secure Access managed configuration.
-#
-# Microsoft documents the Android keys as 'Global Secure Access' (3 = on, user can't disable;
-# absent/unusable = value 1 behaviour, i.e. off by default and user-toggleable) and
-# 'GlobalSecureAccessPrivateChannel' (0 = Private Access off and hidden). Managed Google Play only
-# applies a managed property whose value field matches the app's restriction schema type, and the
-# Intune configuration designer shows both keys as integers. A valueString '3' therefore degrades to
-# the documented default where the user can switch GSA off - the reported child-device failure.
-# The live schema is read (GET only) before every write so a key or type change by Microsoft fails
-# closed instead of silently shipping an ignored value.
+# The live Android schema identifies the "Global Secure Access" UI label as EnableGSA,
+# with integer values. UI labels are not payload keys, even when vendor prose calls them keys.
 
 function Get-CaCChildGsaContract {
     [CmdletBinding()]
@@ -18,11 +10,10 @@ function Get-CaCChildGsaContract {
         Kind         = 'androidenterprise#managedConfiguration'
         ProductId    = 'app:com.microsoft.scmx'
         Settings     = @(
-            [pscustomobject]@{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 3; SchemaType = 'integer' }
+            [pscustomobject]@{ Key = 'EnableGSA'; Field = 'valueInteger'; Value = 3; SchemaType = 'integer' }
             [pscustomobject]@{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueInteger'; Value = 0; SchemaType = 'integer' }
         )
-        # iOS keys and the retired Android Private Access key are never valid on this policy.
-        ForbiddenKeys = @('EnableGSA', 'EnableGSAPrivateChannel', 'GlobalSecureAccessPA')
+        ForbiddenKeys = @('Global Secure Access', 'EnableGSAPrivateChannel', 'GlobalSecureAccessPA')
     }
 }
 
@@ -65,7 +56,7 @@ function Format-CaCManagedPropertyValue {
 function Get-CaCManagedConfigurationSummary {
     <#
     .SYNOPSIS
-        Typed, order-independent description such as 'Global Secure Access=valueInteger:3'. A
+        Typed, order-independent description such as 'EnableGSA=valueInteger:3'. A
         string '3' renders as valueString:"3", so type drift is visible in plans and inventory.
     #>
     [CmdletBinding()]
@@ -208,7 +199,7 @@ function Get-CaCManagedConfigurationSchemaEvidence {
                 DisplayName = Get-CaCProperty $_ 'displayName'
                 DataType    = Get-CaCProperty $_ 'dataType'
             }
-        })
+        } | Sort-Object -Property Key, DisplayName, DataType -Unique)
 
     [pscustomobject]@{
         SchemaId     = $schemaId
@@ -247,12 +238,11 @@ function Get-CaCChildGsaLiveErrors {
         [Parameter(Mandatory)][scriptblock] $GraphInvoker,
         [Parameter(Mandatory)][string] $Path,
         [Parameter(Mandatory)][string] $PolicyId,
-        [string[]] $ExpectedIncludeGroupIds,
-        [switch] $SkipPayload
+        [string[]] $ExpectedIncludeGroupIds
     )
 
     $errors = [System.Collections.Generic.List[string]]::new()
-    if (-not $SkipPayload) { try {
+    try {
         $live = & $GraphInvoker 'GET' "$Path/$PolicyId" $null
         $decoded = ConvertFrom-CaCManagedConfigurationPayload ([string] (Get-CaCProperty $live 'payloadJson'))
         foreach ($problem in @(Test-CaCChildGsaManagedProperties $decoded)) {
@@ -261,7 +251,7 @@ function Get-CaCChildGsaLiveErrors {
     }
     catch {
         $errors.Add("live payload could not be verified: $($_.Exception.Message)")
-    } }
+    }
 
     if ($PSBoundParameters.ContainsKey('ExpectedIncludeGroupIds')) {
         try {

@@ -147,7 +147,7 @@ every request is a `GET` and it cannot change anything. Beyond the app object in
 for the child Defender app configuration:
 
 - for each Global Secure Access key, the desired typed value next to every actual typed value Intune
-  stores. `ForcedOn` is true only for `Global Secure Access` = `valueInteger` `3`, so a string `"3"`
+  stores. `ForcedOn` is true only for the native `EnableGSA` key = `valueInteger` `3`, so a string `"3"`
   doesn't count. `PrivateAccessDisabled` is true only for `GlobalSecureAccessPrivateChannel` =
   `valueInteger` `0`, and Private Access is intentionally off. `ContractSatisfied`/`ContractErrors`
   give the overall verdict;

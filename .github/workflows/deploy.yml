@@ -38,6 +38,12 @@ jobs:
         shell: pwsh
         run: ./scripts/Invoke-CaC.ps1 -Mode validate
 
+      - name: Verify current main before tenant planning
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/Assert-CaCDeploymentSource.ps1
+
       - name: Plan (read-only)
         shell: pwsh
         env:
@@ -51,6 +57,12 @@ jobs:
           ./scripts/Invoke-CaC.ps1 -Mode verify `
             -PlanPath ./out/plan.json `
             -ExpectedCommitSha ${{ github.sha }}
+
+      - name: Verify current main immediately before apply
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/Assert-CaCDeploymentSource.ps1
 
       - name: Apply
         shell: pwsh

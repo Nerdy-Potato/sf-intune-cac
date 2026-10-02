@@ -181,7 +181,7 @@ BeforeAll {
                     return [pscustomobject]@{ value = [pscustomobject]@{
                             id                = $Matches.id
                             schemaItems       = @(
-                                [pscustomobject]@{ schemaItemKey = 'Global Secure Access'; displayName = 'Global Secure Access'; dataType = 'integer' },
+                                [pscustomobject]@{ schemaItemKey = 'EnableGSA'; displayName = 'Global Secure Access'; dataType = 'integer' },
                                 [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; displayName = 'Private Access'; dataType = 'integer' }
                             )
                             nestedSchemaItems = @()
@@ -296,16 +296,16 @@ Describe 'Get-CaCPayloadDrift' {
 
     It 'compares managed app configuration payloadJson by typed value, not raw base64 or loose equality' {
         $desired = @{ payloadJson = ConvertTo-GsaPayloadJson @(
-                @{ key = 'Global Secure Access'; valueInteger = 3 },
+                @{ key = 'EnableGSA'; valueInteger = 3 },
                 @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 }) }
         $reordered = @{ payloadJson = ConvertTo-GsaPayloadJson @(
                 @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 },
-                @{ key = 'Global Secure Access'; valueInteger = 3 }) }
+                @{ key = 'EnableGSA'; valueInteger = 3 }) }
         $stringTyped = @{ payloadJson = ConvertTo-GsaPayloadJson @(
-                @{ key = 'Global Secure Access'; valueString = '3' },
+                @{ key = 'EnableGSA'; valueString = '3' },
                 @{ key = 'GlobalSecureAccessPrivateChannel'; valueString = '0' }) }
         $lowerKey = @{ payloadJson = ConvertTo-GsaPayloadJson @(
-                @{ key = 'global secure access'; valueInteger = 3 },
+                @{ key = 'enablegsa'; valueInteger = 3 },
                 @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 }) }
         InModuleScope IntuneCaC -Parameters @{ D = $desired; R = $reordered; S = $stringTyped; L = $lowerKey } {
             param($D, $R, $S, $L)
@@ -325,23 +325,23 @@ Describe 'Child Android GSA plan and apply guards' {
         $gsa = Get-GsaRemote $state
         $drifted = $gsa | Select-Object *
         $drifted.payloadJson = ConvertTo-GsaPayloadJson @(
-            @{ key = 'Global Secure Access'; valueInteger = 1 },
+            @{ key = 'EnableGSA'; valueInteger = 1 },
             @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 })
         $state.FullReadOverride = @{ $gsa.id = $drifted }
         $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
         $update = @($plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'Update' -and $_.Target -eq $gsa.displayName })
         $update.Count | Should -Be 1
-        ($update[0].Details -join ' ') | Should -BeLike '*Global Secure Access=valueInteger:1*Global Secure Access=valueInteger:3*'
+        ($update[0].Details -join ' ') | Should -BeLike '*EnableGSA=valueInteger:1*EnableGSA=valueInteger:3*'
         @($state.Calls | Where-Object { $_.Method -eq 'GET' -and $_.Uri -eq "deviceAppManagement/mobileAppConfigurations/$($gsa.id)" }).Count |
             Should -BeGreaterThan 0
     }
 
     It 'fails closed for the GSA policy only when the live schema key or type does not match' -ForEach @(
         @{ Name = 'string type'; Items = @(
-                [pscustomobject]@{ schemaItemKey = 'Global Secure Access'; dataType = 'string' },
+                [pscustomobject]@{ schemaItemKey = 'EnableGSA'; dataType = 'string' },
                 [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; dataType = 'integer' }) }
         @{ Name = 'missing main key'; Items = @(
-                [pscustomobject]@{ schemaItemKey = 'EnableGSA'; displayName = 'Global Secure Access'; dataType = 'integer' },
+                [pscustomobject]@{ schemaItemKey = 'Global Secure Access'; displayName = 'Global Secure Access'; dataType = 'integer' },
                 [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; dataType = 'integer' }) }
     ) {
         $state = New-FakeTenant -InSync
@@ -361,7 +361,7 @@ Describe 'Child Android GSA plan and apply guards' {
         $state = New-FakeTenant -InSync
         $gsa = Get-GsaRemote $state
         $gsa.payloadJson = ConvertTo-GsaPayloadJson @(
-            @{ key = 'Global Secure Access'; valueInteger = 0 },
+            @{ key = 'EnableGSA'; valueInteger = 0 },
             @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 })
         $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
         $state.SchemaError = 'Forbidden'
@@ -374,7 +374,7 @@ Describe 'Child Android GSA plan and apply guards' {
         $state = New-FakeTenant -InSync
         $gsa = Get-GsaRemote $state
         $gsa.payloadJson = ConvertTo-GsaPayloadJson @(
-            @{ key = 'Global Secure Access'; valueInteger = 1 },
+            @{ key = 'EnableGSA'; valueInteger = 1 },
             @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 })
         $invoker = New-FakeInvoker $state
         $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $invoker
@@ -382,18 +382,23 @@ Describe 'Child Android GSA plan and apply guards' {
         $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
         $failed = @($results | Where-Object { $_.Status -eq 'Failed' -and $_.Target -eq $gsa.displayName })
         $failed.Count | Should -Be 1
-        $failed[0].Message | Should -BeLike "post-write readback*'Global Secure Access' must be valueInteger:3*found valueInteger:1*"
+        $failed[0].Message | Should -BeLike "post-write readback*'EnableGSA' must be valueInteger:3*found valueInteger:1*"
     }
 
     It 'stale-plan guard: re-verifies a NoChange GSA policy at apply time and fails it if it drifted' -ForEach @(
         @{ Name = 'main toggled to 1'; Mutate = { param($s, $g)
                 $g.payloadJson = ConvertTo-GsaPayloadJson @(
-                    @{ key = 'Global Secure Access'; valueInteger = 1 },
+                    @{ key = 'EnableGSA'; valueInteger = 1 },
                     @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 }) } }
         @{ Name = 'exclusion added'; Mutate = { param($s, $g)
                 $s.Assignments[$g.id] = @($s.Assignments[$g.id]) + [pscustomobject]@{
                     target = [pscustomobject]@{ '@odata.type' = '#microsoft.graph.exclusionGroupAssignmentTarget'; groupId = 'group-x' } } } }
         @{ Name = 'child group removed'; Mutate = { param($s, $g) $s.Assignments[$g.id] = @($s.Assignments[$g.id] | Select-Object -First 1) } }
+        @{ Name = 'schema changed after planning'; Mutate = { param($s, $g)
+                $s.Schema = [pscustomobject]@{ schemaItems = @(
+                    [pscustomobject]@{ schemaItemKey = 'EnableGSA'; dataType = 'string' },
+                    [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; dataType = 'integer' }
+                ) } } }
     ) {
         $state = New-FakeTenant -InSync
         $gsa = Get-GsaRemote $state
@@ -428,7 +433,7 @@ Describe 'New-CaCPlan' {
     It 'repairs the previously pinned string-typed GSA values through a reviewed plan and stays typed on repeated plan/apply' {
         $state = New-FakeTenant -InSync
         $gsa = Get-GsaRemote $state
-        # The pre-fix repository state: both keys valueString "3" (main ignored, Private Access on).
+        # The observed regression: UI label used as a key, and both values serialized as strings.
         $gsa.payloadJson = ConvertTo-GsaPayloadJson @(
             @{ key = 'Global Secure Access'; valueString = '3' },
             @{ key = 'GlobalSecureAccessPrivateChannel'; valueString = '3' })
@@ -447,7 +452,7 @@ Describe 'New-CaCPlan' {
         $results = Invoke-CaCPlan -Plan $roundTripped -Configuration $script:Config -GraphInvoker $writer -Confirm:$false
         @($results | Where-Object Status -EQ 'Failed') | Should -BeNullOrEmpty
         $applied = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($gsa.payloadJson)) | ConvertFrom-Json
-        $applied.managedProperty.key | Should -Be @('Global Secure Access', 'GlobalSecureAccessPrivateChannel')
+        $applied.managedProperty.key | Should -Be @('EnableGSA', 'GlobalSecureAccessPrivateChannel')
         $applied.managedProperty.valueInteger | Should -Be @(3, 0)
         $applied.managedProperty[0].valueInteger | Should -BeOfType [long]
         @($applied.managedProperty | Where-Object { $_.PSObject.Properties['valueString'] }) | Should -BeNullOrEmpty

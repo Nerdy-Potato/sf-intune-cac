@@ -60,24 +60,27 @@ The plan reports either package as `Prerequisite` until it exists, and never pre
 
 ## MDE and Global Secure Access
 
-On Android, Defender is required and its managed-device app configuration sets `Global Secure Access`
+On Android, Defender is required and its managed-device app configuration sets `EnableGSA`
 to the integer `3`, which turns GSA on and stops the user from disabling it inside Defender. Private
 Access isn't used, so `GlobalSecureAccessPrivateChannel` is the integer `0`, which turns Private Access
-off and hides its toggle. That `0` is intended and isn't a loss of protection. These are the Android key names; the iOS keys
-`EnableGSA`/`EnableGSAPrivateChannel` and the retired `GlobalSecureAccessPA` are rejected. That
+off and hides its toggle. That `0` is intended and isn't a loss of protection.
+The [live Android schema inventory](https://github.com/Nerdy-Potato/sf-intune-cac/actions/runs/37012432082)
+confirms that `EnableGSA` is the native Android key behind the **Global Secure Access** display label.
+The display label must not be used as a payload key. The iOS private-channel key
+`EnableGSAPrivateChannel` and retired `GlobalSecureAccessPA` are rejected. That
 app-config setting only stops the user from disabling GSA inside Defender; it doesn't force every
 other app's traffic through the tunnel. `android-fully-managed-restrictions-child.json` also sets
 `vpnAlwaysOnPackageIdentifier` to the Defender package (`com.microsoft.scmx`) with
 `vpnAlwaysOnLockdownMode: true`, so the device has no network connectivity at all unless the GSA
 tunnel is connected - closing the gap where another app could bypass Global Secure Access entirely.
-Both values are typed `valueInteger`, matching the integer type that Defender's managed configuration schema
-gives them. An earlier revision sent `valueString` `"3"` for both keys. Managed Google Play doesn't apply a
-value whose type doesn't match the schema, so Defender fell back to its documented default: GSA off,
-with the user able to switch it on and off. Validation, planning and apply now enforce the
+Both values are typed `valueInteger`, matching the integer types confirmed by the live schema.
+PR #74 replaced the native `EnableGSA` key with the display label and sent `valueString` `"3"`
+for both settings. That payload did not match the app's key/type contract, despite Graph accepting it
+and Intune reporting compliant delivery. It also re-enabled unused Private Access. Validation, planning and apply now enforce the
 typed contract:
 
-- `Test-CaCConfiguration` rejects any other key, type, value, duplicate, case variant or forbidden
-  key.
+- `Test-CaCConfiguration` rejects missing required keys, wrong types or values, duplicates, case
+  variants and forbidden keys.
 - Plan compares the decoded `payloadJson` by key, field and typed value, using a full `GET` of the
   object instead of the list response.
 - Plan and apply both read the live Managed Google Play schema
