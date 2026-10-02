@@ -716,6 +716,26 @@ function Invoke-CaCPlan {
         }
 
         if (-not $PSCmdlet.ShouldProcess($action.Target, "$($action.Action) policy")) { continue }
+
+        # Child GSA is written only when the live Managed Google Play schema still confirms the
+        # typed key contract; otherwise this one policy fails closed (no write, no fallback) and
+        # the rest of the deployment continues. An existing policy keeps its assignments.
+        $isChildGsa = Test-CaCChildGsaPolicy $policy
+        if ($isChildGsa) {
+            $schemaErrors = @((Get-CaCManagedConfigurationSchemaEvidence -GraphInvoker $GraphInvoker).Errors)
+            if ($schemaErrors) {
+                if ($action.Action -eq 'Update') {
+                    $policyIds[$policy.payload.displayName] = Get-CaCProperty -InputObject $actionData -Name 'Id'
+                }
+                else {
+                    $failedPolicyNames[$policy.payload.displayName] = $true
+                }
+                Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'Failed' -Message (
+                    "refusing to write child GSA configuration; schema contract not verified: $($schemaErrors -join ' ')")
+                continue
+            }
+        }
+
         try {
             $payload = Get-CaCPolicyPayload -Policy $policy -AppObjectIds $appIds
         }
@@ -753,6 +773,16 @@ function Invoke-CaCPlan {
             }
             if (-not $operation.Succeeded) {
                 $failedPolicyNames[$policy.payload.displayName] = $true
+                continue
+            }
+        }
+
+        if ($isChildGsa) {
+            $readbackErrors = @(Get-CaCChildGsaLiveErrors -GraphInvoker $GraphInvoker -Path $endpoint.Path `
+                    -PolicyId $policyIds[$policy.payload.displayName])
+            if ($readbackErrors) {
+                Add-Result -Action "$($action.Action) policy" -Target $action.Target -Status 'Failed' -Message (
+                    "post-write readback does not satisfy the child GSA contract: $($readbackErrors -join ' ')")
                 continue
             }
         }
@@ -820,7 +850,43 @@ function Invoke-CaCPlan {
             & $GraphInvoker 'POST' "$($endpoint.Path)/$policyId/$($endpoint.AssignAction)" $assignmentBody | Out-Null
         }
         if (-not $operation.Succeeded) { continue }
+        if (Test-CaCChildGsaPolicy $policy) {
+            $expectedGroupIds = @($assignments | Where-Object { $_.target['@odata.type'] -eq '#microsoft.graph.groupAssignmentTarget' } |
+                ForEach-Object { [string] $_.target.groupId })
+            $readbackErrors = @(Get-CaCChildGsaLiveErrors -GraphInvoker $GraphInvoker -Path $endpoint.Path -PolicyId $policyId `
+                    -ExpectedIncludeGroupIds $expectedGroupIds -SkipPayload)
+            if ($readbackErrors) {
+                Add-Result -Action 'Assign policy' -Target $action.Target -Status 'Failed' -Message (
+                    "post-assign readback does not satisfy the child GSA contract: $($readbackErrors -join ' ')")
+                continue
+            }
+        }
         Add-Result -Action 'Assign policy' -Target $action.Target -Status 'Applied' -Message ($action.Details -join '; ')
+    }
+
+    # A reviewed plan can be stale: re-verify a NoChange child GSA policy against live state at
+    # apply time (GET only) so a portal edit made after review is reported, never assumed fine.
+    foreach ($action in @($Plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'NoChange' })) {
+        $actionData = Get-CaCProperty -InputObject $action -Name 'Data'
+        $policy = Get-CaCProperty -InputObject $actionData -Name 'Policy'
+        if (-not $policy -or -not (Test-CaCChildGsaPolicy $policy)) { continue }
+
+        $endpoint = Get-CaCResourceMap -Resource $policy.resource
+        $policyId = Get-CaCProperty -InputObject $actionData -Name 'Id'
+        $guardErrors = try {
+            $expectedGroupIds = @($policy.assignments | Where-Object { $_.intent -ne 'exclude' } | ForEach-Object {
+                    [string] (Get-CaCAssignmentTarget -Assignment $_ -GroupObjectIds $groupObjectIds).groupId
+                })
+            @(Get-CaCChildGsaLiveErrors -GraphInvoker $GraphInvoker -Path $endpoint.Path -PolicyId $policyId `
+                    -ExpectedIncludeGroupIds $expectedGroupIds)
+        }
+        catch {
+            @("live verification failed: $($_.Exception.Message)")
+        }
+        if ($guardErrors) {
+            Add-Result -Action 'Verify policy' -Target $action.Target -Status 'Failed' -Message (
+                "child GSA drifted since the reviewed plan; re-run plan and apply: $($guardErrors -join ' ')")
+        }
     }
 
     foreach ($action in @($Plan | Where-Object { $_.Action -eq 'Delete' })) {

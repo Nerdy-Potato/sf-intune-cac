@@ -1,12 +1,19 @@
 {
   "$schema": "../../../schemas/policy.schema.json",
   "comment": [
-    "The GSA Android client is built into Defender. Value 3 enables it by default and removes the",
-    "user's ability to disable it. The profile applies only to Android Device Owner enrollment.",
-    "packageId uses the app: product prefix returned by Intune for managed app configurations.",
-    "Graph requires payloadJson to be base64-encoded JSON, not a raw JSON string (this was the",
-    "cause of a generic 400 'An error has occurred' on every apply attempt). The decoded value is:",
-    "{\"kind\":\"androidenterprise#managedConfiguration\",\"productId\":\"app:com.microsoft.scmx\",\"managedProperty\":[{\"key\":\"Global Secure Access\",\"valueString\":\"3\"},{\"key\":\"GlobalSecureAccessPrivateChannel\",\"valueString\":\"3\"}]}"
+    "The GSA Android client is built into Defender. 'Global Secure Access' = 3 enables it by default",
+    "and removes the user's ability to disable it. Private Access is not used, so",
+    "'GlobalSecureAccessPrivateChannel' = 0 turns it off and hides its toggle; 0 is intended.",
+    "Both values are typed valueInteger: the Defender restriction schema (Intune designer) types",
+    "them as integers, and a mistyped valueString is not applied, which leaves Microsoft's",
+    "documented default where the user can switch GSA off. Plan/apply read the live schema",
+    "(GET only) and fail closed if Microsoft changes either key or type, and apply reads the",
+    "policy back after every write. Never edit this policy in the portal: the designer drops or",
+    "blanks values that do not match its schema, and the next deploy must then repair it.",
+    "The profile applies only to Android Device Owner enrollment. packageId uses the app: product",
+    "prefix returned by Intune for managed app configurations. Graph requires payloadJson to be",
+    "base64-encoded JSON, not a raw JSON string. The decoded value is:",
+    "{\"kind\":\"androidenterprise#managedConfiguration\",\"productId\":\"app:com.microsoft.scmx\",\"managedProperty\":[{\"key\":\"Global Secure Access\",\"valueInteger\":3},{\"key\":\"GlobalSecureAccessPrivateChannel\",\"valueInteger\":0}]}"
   ],
   "name": "android-defender-gsa-child",
   "resource": "mobileAppConfigurations",
@@ -21,7 +28,7 @@
     "description": "Managed by sf-intune-cac. Do not edit in the portal.",
     "packageId": "app:com.microsoft.scmx",
     "profileApplicability": "androidDeviceOwner",
-    "payloadJson": "eyJraW5kIjoiYW5kcm9pZGVudGVycHJpc2UjbWFuYWdlZENvbmZpZ3VyYXRpb24iLCJwcm9kdWN0SWQiOiJhcHA6Y29tLm1pY3Jvc29mdC5zY214IiwibWFuYWdlZFByb3BlcnR5IjpbeyJrZXkiOiJHbG9iYWwgU2VjdXJlIEFjY2VzcyIsInZhbHVlU3RyaW5nIjoiMyJ9LHsia2V5IjoiR2xvYmFsU2VjdXJlQWNjZXNzUHJpdmF0ZUNoYW5uZWwiLCJ2YWx1ZVN0cmluZyI6IjMifV19",
+    "payloadJson": "eyJraW5kIjoiYW5kcm9pZGVudGVycHJpc2UjbWFuYWdlZENvbmZpZ3VyYXRpb24iLCJwcm9kdWN0SWQiOiJhcHA6Y29tLm1pY3Jvc29mdC5zY214IiwibWFuYWdlZFByb3BlcnR5IjpbeyJrZXkiOiJHbG9iYWwgU2VjdXJlIEFjY2VzcyIsInZhbHVlSW50ZWdlciI6M30seyJrZXkiOiJHbG9iYWxTZWN1cmVBY2Nlc3NQcml2YXRlQ2hhbm5lbCIsInZhbHVlSW50ZWdlciI6MH1dfQ==",
     "permissionActions": []
   }
 }

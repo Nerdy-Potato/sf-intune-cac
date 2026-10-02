@@ -11,47 +11,74 @@ Describe 'Mandatory child Android GSA protection' {
         $script:Defender = $script:Config.Apps | Where-Object id -EQ 'android-defender'
     }
 
-    It 'keeps both exact Android keys at string 3 and requires protection by device tier' {
+    It 'forces main GSA on (integer 3), turns unused Private Access off (integer 0) and requires device-tier protection' {
         $settings = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($script:Gsa.payload.payloadJson)) |
             ConvertFrom-Json -AsHashtable
         $settings.managedProperty.key | Should -Be @('Global Secure Access', 'GlobalSecureAccessPrivateChannel')
-        $settings.managedProperty.valueString | Should -Be @('3', '3')
-        @($script:Gsa.assignments | Where-Object intent -EQ 'include').group | Should -Contain 'sg-devices-child'
+        $settings.managedProperty.valueInteger | Should -Be @(3, 0)
+        foreach ($property in $settings.managedProperty) {
+            @($property.Keys | Where-Object { $_ -like 'value*' }) | Should -Be @('valueInteger')
+            $property.valueInteger | Should -BeOfType [long]
+        }
+        @($script:Gsa.assignments | Where-Object intent -EQ 'include').group | Should -Be @('sg-tier-child', 'sg-devices-child')
+        @($script:Gsa.assignments | Where-Object intent -EQ 'exclude') | Should -BeNullOrEmpty
         @($script:Defender.assignments | Where-Object intent -EQ 'required').group | Should -Contain 'sg-devices-child'
+        @($script:Defender.assignments | Where-Object intent -EQ 'required').group | Should -Contain 'sg-tier-child'
         $script:Vpn.payload.vpnAlwaysOnLockdownMode | Should -BeTrue
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa') | Should -BeNullOrEmpty
     }
 
-    It 'rejects <Key> set to <Value>' -ForEach @(
-        @{ Key = 'Global Secure Access'; Value = '0' }
-        @{ Key = 'Global Secure Access'; Value = '1' }
-        @{ Key = 'Global Secure Access'; Value = '2' }
-        @{ Key = 'GlobalSecureAccessPrivateChannel'; Value = '0' }
-        @{ Key = 'GlobalSecureAccessPrivateChannel'; Value = '1' }
-        @{ Key = 'GlobalSecureAccessPrivateChannel'; Value = '2' }
-        @{ Key = 'Global Secure Access'; Value = 3 }
+    It 'rejects <Key> = <Field>:<Value>' -ForEach @(
+        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 0 }
+        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 1 }
+        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 2 }
+        @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueInteger'; Value = 1 }
+        @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueInteger'; Value = 2 }
+        @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueInteger'; Value = 3 }
+        @{ Key = 'Global Secure Access'; Field = 'valueString'; Value = '3' }
+        @{ Key = 'GlobalSecureAccessPrivateChannel'; Field = 'valueString'; Value = '0' }
+        @{ Key = 'Global Secure Access'; Field = 'valueBool'; Value = $true }
+        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = 3.0 }
+        @{ Key = 'Global Secure Access'; Field = 'valueInteger'; Value = '3' }
     ) {
         $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($script:Gsa.payload.payloadJson)) |
             ConvertFrom-Json -AsHashtable
-        ($decoded.managedProperty | Where-Object key -EQ $Key).valueString = $Value
+        $property = $decoded.managedProperty | Where-Object key -EQ $Key
+        $property.Remove('valueInteger')
+        $property[$Field] = $Value
         $script:Gsa.payload.payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
             ($decoded | ConvertTo-Json -Depth 10 -Compress)))
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
     }
 
-    It 'rejects malformed payloads, missing keys, duplicate keys and competing value types' -ForEach @(
-        @{ Mutation = 'base64' }, @{ Mutation = 'missing' }, @{ Mutation = 'duplicate' }, @{ Mutation = 'type' }
+    It 'rejects malformed payloads, missing/duplicate/variant keys, competing value types and wrong product (<Mutation>)' -ForEach @(
+        @{ Mutation = 'base64' }, @{ Mutation = 'missing-main' }, @{ Mutation = 'missing-private' }, @{ Mutation = 'duplicate' }
+        @{ Mutation = 'competing' }, @{ Mutation = 'case' }, @{ Mutation = 'whitespace' }, @{ Mutation = 'product' }
+        @{ Mutation = 'kind' }, @{ Mutation = 'legacy-pa' }, @{ Mutation = 'ios-private' }
     ) {
         $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($script:Gsa.payload.payloadJson)) |
             ConvertFrom-Json -AsHashtable
         switch ($Mutation) {
-            'missing' { $decoded.managedProperty = @($decoded.managedProperty[0]) }
-            'duplicate' { $decoded.managedProperty += $decoded.managedProperty[1] }
-            'type' { $decoded.managedProperty[0].valueInteger = 3 }
+            'missing-main' { $decoded.managedProperty = @($decoded.managedProperty[1]) }
+            'missing-private' { $decoded.managedProperty = @($decoded.managedProperty[0]) }
+            'duplicate' { $decoded.managedProperty += @{ key = 'Global Secure Access'; valueInteger = 3 } }
+            'competing' { $decoded.managedProperty[0].valueString = '3' }
+            'case' { $decoded.managedProperty[0].key = 'global secure access' }
+            'whitespace' { $decoded.managedProperty[0].key = 'Global Secure Access ' }
+            'product' { $decoded.productId = 'app:com.microsoft.emmx' }
+            'kind' { $decoded.kind = 'other' }
+            'legacy-pa' { $decoded.managedProperty += @{ key = 'GlobalSecureAccessPA'; valueInteger = 0 } }
+            'ios-private' { $decoded.managedProperty += @{ key = 'EnableGSAPrivateChannel'; valueInteger = 0 } }
         }
         $script:Gsa.payload.payloadJson = if ($Mutation -eq 'base64') { 'not-base64!' }
         else { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($decoded | ConvertTo-Json -Depth 10 -Compress))) }
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
+    }
+
+    It 'accepts the contract regardless of managedProperty order' {
+        $script:Gsa.payload.payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+            '{"kind":"androidenterprise#managedConfiguration","productId":"app:com.microsoft.scmx","managedProperty":[{"key":"GlobalSecureAccessPrivateChannel","valueInteger":0},{"key":"Global Secure Access","valueInteger":3}]}'))
+        @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa') | Should -BeNullOrEmpty
     }
 
     It 'rejects removal or disabling of either protective policy' -ForEach @(
@@ -75,6 +102,11 @@ Describe 'Mandatory child Android GSA protection' {
 
     It 'rejects exclusion of protected devices' {
         $script:Gsa.assignments += @{ group = 'sg-tier-teen'; intent = 'exclude' }
+        @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
+    }
+
+    It 'rejects loss of the child user-tier assignment on the GSA policy' {
+        $script:Gsa.assignments = @($script:Gsa.assignments | Where-Object group -NE 'sg-tier-child')
         @(Test-CaCConfiguration $script:Config | Where-Object Rule -EQ 'safety/child-android-gsa').Count | Should -BeGreaterThan 0
     }
 

@@ -61,22 +61,51 @@ The plan reports either package as `Prerequisite` until it exists, and never pre
 ## MDE and Global Secure Access
 
 On Android, Defender is required and its managed-device app configuration sets `Global Secure Access`
-and `GlobalSecureAccessPrivateChannel` to `3`, which turns them on and prevents user disablement. That
+to the integer `3`, which turns GSA on and stops the user from disabling it inside Defender. Private
+Access isn't used, so `GlobalSecureAccessPrivateChannel` is the integer `0`, which turns Private Access
+off and hides its toggle. That `0` is intended and isn't a loss of protection. These are the Android key names; the iOS keys
+`EnableGSA`/`EnableGSAPrivateChannel` and the retired `GlobalSecureAccessPA` are rejected. That
 app-config setting only stops the user from disabling GSA inside Defender; it doesn't force every
 other app's traffic through the tunnel. `android-fully-managed-restrictions-child.json` also sets
 `vpnAlwaysOnPackageIdentifier` to the Defender package (`com.microsoft.scmx`) with
 `vpnAlwaysOnLockdownMode: true`, so the device has no network connectivity at all unless the GSA
 tunnel is connected - closing the gap where another app could bypass Global Secure Access entirely.
-Both values are the string `3`; the base64 `payloadJson` is the encoding of the decoded example in
-that file's `comment`, and the two must always agree.
+Both values are typed `valueInteger`, matching the integer type that Defender's managed configuration schema
+gives them. An earlier revision sent `valueString` `"3"` for both keys. Managed Google Play doesn't apply a
+value whose type doesn't match the schema, so Defender fell back to its documented default: GSA off,
+with the user able to switch it on and off. Validation, planning and apply now enforce the
+typed contract:
+
+- `Test-CaCConfiguration` rejects any other key, type, value, duplicate, case variant or forbidden
+  key.
+- Plan compares the decoded `payloadJson` by key, field and typed value, using a full `GET` of the
+  object instead of the list response.
+- Plan and apply both read the live Managed Google Play schema
+  (`deviceManagement/androidManagedStoreAppConfigurationSchemas`, `GET` only). They refuse to write
+  this one policy (result `Failed`) if the schema doesn't type both keys as `integer`.
+- Apply reads the policy and its assignments back after every write. It also re-checks a `NoChange`
+  policy at apply time, so a portal edit made after plan review is reported as `Failed` and isn't
+  silently trusted.
+
+Don't edit this policy in the Intune portal: the configuration designer drops or blanks values that
+don't match its schema. The base64 `payloadJson` is the encoding of the decoded example in that file's
+`comment`, and the two must always agree.
 
 Check that from the tenant with the **Inventory Intune apps** workflow, which runs
 `scripts/bootstrap/Get-CaCAppInventory.ps1 -IncludeChildGsa` under the read-only plan identity
-(every request is a `GET`). It decodes and reports both live GSA values, the child user- and
-device-group include flags with their member counts, the exclusion count, how many competing
-Defender app configurations exist, and the aggregate reported `deviceStatuses` - no device, user, or
-tenant identifiers. It warns when either value is not forced on, and when more than one Defender app
-configuration exists to overlap. Run it before deployment to capture the starting state and again
+(every request is a `GET`). It decodes both keys and reports the desired typed value next to every
+typed value that's actually stored, for example `valueString:"3"` versus `valueInteger:3`. It also
+reports the live schema key/type evidence, the child user- and device-group include flags with their
+member counts, the exclusion count, how many competing Defender app configurations exist, and the
+aggregate reported `deviceStatuses`, with no device, user, or tenant identifiers. `deviceStatuses`
+shows Intune delivery state, not proof of the GSA toggle on the device. It warns in these cases:
+
+- the main key isn't `valueInteger` `3`;
+- any part of the typed contract is violated;
+- the schema doesn't confirm the contract;
+- more than one Defender app configuration exists and could overlap.
+
+Run it before deployment to capture the starting state and again
 afterwards to confirm the change landed. See [operations.md](operations.md) for what it does and
 does not prove.
 

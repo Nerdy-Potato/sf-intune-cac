@@ -21,6 +21,11 @@ function Test-CaCChildAndroidProtection {
         }).Count -eq 0
     }
 
+    function Test-ChildUserAssignment {
+        param($Assignments, [string] $Intent)
+        return @($Assignments | Where-Object { $_.group -eq 'sg-tier-child' -and $_.intent -eq $Intent }).Count -eq 1
+    }
+
     $gsa = @($Configuration.Policies | Where-Object name -EQ 'android-defender-gsa-child')
     if ($gsa.Count -ne 1) {
         New-ProtectionFinding 'android-defender-gsa-child' 'Exactly one enabled child Android GSA policy is required.'
@@ -34,28 +39,17 @@ function Test-CaCChildAndroidProtection {
             (Get-CaCProperty $payload 'profileApplicability') -ne 'androidDeviceOwner' -or
             @((Get-CaCProperty $policy 'targetApps')).Count -ne 1 -or
             @((Get-CaCProperty $policy 'targetApps'))[0] -ne 'android-defender' -or
-            -not (Test-DeviceAssignment $policy.assignments 'include')) {
-            New-ProtectionFinding $policy.name 'GSA must target Defender on Android Device Owner and include child devices without exclusions.'
+            -not (Test-DeviceAssignment $policy.assignments 'include') -or
+            -not (Test-ChildUserAssignment $policy.assignments 'include')) {
+            New-ProtectionFinding $policy.name 'GSA must target Defender on Android Device Owner and include both child user and device groups without exclusions.'
         }
 
+        # Typed contract: main GSA forced on (valueInteger 3) and Private Access off (valueInteger 0).
+        # Private Access is not used; 0 is intended, not a loss of protection.
         try {
-            $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(
-                [string] (Get-CaCProperty $payload 'payloadJson'))) | ConvertFrom-Json -AsHashtable -ErrorAction Stop
-            if ((Get-CaCProperty $decoded 'kind') -ne 'androidenterprise#managedConfiguration' -or
-                (Get-CaCProperty $decoded 'productId') -ne 'app:com.microsoft.scmx') {
-                throw 'The managed configuration must identify the Defender Android product.'
-            }
-            foreach ($key in @('Global Secure Access', 'GlobalSecureAccessPrivateChannel')) {
-                $setting = @((Get-CaCProperty $decoded 'managedProperty') | Where-Object {
-                    (Get-CaCProperty $_ 'key') -ceq $key
-                })
-                if ($setting.Count -ne 1 -or
-                    (Get-CaCProperty $setting[0] 'valueString') -isnot [string] -or
-                    (Get-CaCProperty $setting[0] 'valueString') -cne '3' -or
-                    @($setting[0].Keys | Where-Object { $_ -like 'value*' -and $_ -ne 'valueString' }).Count -ne 0) {
-                    throw "'$key' must occur exactly once with valueString='3' and no competing value type."
-                }
-            }
+            $decoded = ConvertFrom-CaCManagedConfigurationPayload ([string] (Get-CaCProperty $payload 'payloadJson'))
+            $contractErrors = @(Test-CaCChildGsaManagedProperties $decoded)
+            if ($contractErrors) { throw ($contractErrors -join ' ') }
         }
         catch {
             New-ProtectionFinding $policy.name "Invalid mandatory GSA payload: $($_.Exception.Message)"
@@ -75,7 +69,8 @@ function Test-CaCChildAndroidProtection {
     $defender = @($Configuration.Apps | Where-Object id -EQ 'android-defender')
     if ($defender.Count -ne 1 -or
         (Get-CaCProperty $defender[0].payload 'packageId') -ne 'com.microsoft.scmx' -or
-        -not (Test-DeviceAssignment $defender[0].assignments 'required')) {
-        New-ProtectionFinding 'android-defender' 'Defender must be a required app for child devices without exclusions or uninstall assignments.'
+        -not (Test-DeviceAssignment $defender[0].assignments 'required') -or
+        -not (Test-ChildUserAssignment $defender[0].assignments 'required')) {
+        New-ProtectionFinding 'android-defender' 'Defender must be a required app for child users and devices without exclusions or uninstall assignments.'
     }
 }

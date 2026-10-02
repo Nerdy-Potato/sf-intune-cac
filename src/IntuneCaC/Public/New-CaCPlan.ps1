@@ -280,7 +280,11 @@ function New-CaCPlan {
             $adopted = $false
 
             if (-not $remote) {
-                Add-Action -Kind 'Policy' -Action 'Create' -Target $policy.payload.displayName -Data $policy -Details @("resource: $resource") `
+                $createDetails = @("resource: $resource")
+                if (Test-CaCChildGsaPolicy $policy) {
+                    $createDetails += @(Get-CaCChildGsaPlanFindings -GraphInvoker $GraphInvoker)
+                }
+                Add-Action -Kind 'Policy' -Action 'Create' -Target $policy.payload.displayName -Data $policy -Details $createDetails `
                     -RequiresPortalApply $requiresPortalApply
                 Add-Action -Kind 'Assignment' -Action 'Update' -Target $policy.payload.displayName -Data $policy -Details @(
                     ($policy.assignments | ForEach-Object { "$($_.intent) $($_.group)" })
@@ -340,12 +344,20 @@ function New-CaCPlan {
                 $actualForDrift = $remote | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable
                 $actualForDrift['settings'] = @($settingsResponse.value | Where-Object { $_ })
             }
+            elseif ($resource -eq 'mobileAppConfigurations') {
+                # Never diff managed app configuration content against the list response: compare
+                # the full object Graph returns for this id, so payloadJson is the stored value.
+                $actualForDrift = & $GraphInvoker 'GET' "$($endpoint.Path)/$($remote.id)" $null
+            }
 
             $drift = if ($targetResolutionError) {
                 @("target app dependency: $targetResolutionError")
             }
             else {
                 @(Get-CaCPayloadDrift -Desired $desiredPayload -Actual $actualForDrift)
+            }
+            if (Test-CaCChildGsaPolicy $policy) {
+                $drift = @($drift) + @(Get-CaCChildGsaPlanFindings -GraphInvoker $GraphInvoker)
             }
             if ($adopted) {
                 $drift = @($drift | Where-Object { $_ -notlike 'description:*' })

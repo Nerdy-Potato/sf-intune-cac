@@ -16,8 +16,12 @@
     Run this to see, for every current mobileApps object, whether its live type actually matches
     what config declares - so mismatches can be identified and deleted for CI to recreate correctly
     typed, instead of being missed indefinitely.
-    IncludeChildGsa also reports the two live GSA values, child assignment coverage and aggregate
-    device status counts without publishing device/user identifiers.
+    IncludeChildGsa also reports, for the two Android GSA keys, the desired typed value next to
+    every actual typed value stored by Intune (valueString "3" is NOT reported as forced on), the
+    live Managed Google Play schema key/type evidence, child assignment coverage and aggregate
+    Intune delivery status counts, without publishing device/user identifiers. Private Access
+    (GlobalSecureAccessPrivateChannel) is intentionally 0; a delivery status of 'compliant' is
+    not proof of the on-device GSA state.
 .EXAMPLE
     ./scripts/bootstrap/Get-CaCAppInventory.ps1
 #>
@@ -146,16 +150,32 @@ if ($IncludeChildGsa) {
     if ($matches.Count -ne 1) { throw 'Expected exactly one live child Defender/GSA app configuration.' }
     $gsaId = & $getProperty $matches[0] 'id'
     $gsa = & $graphInvoker 'GET' "deviceAppManagement/mobileAppConfigurations/$gsaId" $null
-    $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(
-        [string] (& $getProperty $gsa 'payloadJson'))) | ConvertFrom-Json -AsHashtable
-    $settings = foreach ($key in @('Global Secure Access', 'GlobalSecureAccessPrivateChannel')) {
-        $values = @($decoded.managedProperty | Where-Object key -CEQ $key)
-        [pscustomobject]@{
-            Key = $key
-            Value = @($values | ForEach-Object { & $getProperty $_ 'valueString' }) -join ','
-            ForcedOn = $values.Count -eq 1 -and (& $getProperty $values[0] 'valueString') -ceq '3'
+    $contract = & $module { Get-CaCChildGsaContract }
+    $decoded = & $module { param($PayloadJson) ConvertFrom-CaCManagedConfigurationPayload $PayloadJson } (
+        [string] (& $getProperty $gsa 'payloadJson'))
+    $contractErrors = @(& $module { param($Decoded) Test-CaCChildGsaManagedProperties $Decoded } $decoded)
+    $settings = foreach ($setting in $contract.Settings) {
+        $values = @($decoded.managedProperty | Where-Object { (& $getProperty $_ 'key') -ceq $setting.Key })
+        $actual = @($values | ForEach-Object {
+                $property = $_
+                @($property.Keys | Where-Object { $_ -clike 'value*' } | Sort-Object | ForEach-Object {
+                        '{0}:{1}' -f $_, (ConvertTo-Json -InputObject $property[$_] -Compress)
+                    }) -join '|'
+            })
+        $desired = '{0}:{1}' -f $setting.Field, $setting.Value
+        $matchesDesired = $values.Count -eq 1 -and $actual.Count -eq 1 -and $actual[0] -ceq $desired
+        $row = [ordered]@{
+            Key        = $setting.Key
+            Desired    = $desired
+            Actual     = $actual
+            EntryCount = $values.Count
+            Matches    = $matchesDesired
         }
+        if ($setting.Key -ceq 'Global Secure Access') { $row.ForcedOn = $matchesDesired }
+        else { $row.PrivateAccessDisabled = $matchesDesired }
+        [pscustomobject] $row
     }
+    $schema = & $module { param($Invoker) Get-CaCManagedConfigurationSchemaEvidence -GraphInvoker $Invoker } $graphInvoker
     $assignments = @((& $graphInvoker 'GET' "deviceAppManagement/mobileAppConfigurations/$gsaId/assignments" $null).value |
         Where-Object { $_ })
     $coverage = foreach ($groupKey in @('sg-tier-child', 'sg-devices-child')) {
@@ -184,6 +204,13 @@ if ($IncludeChildGsa) {
     Write-Host '--- Child Android GSA (read-only, no device/user identifiers) ---'
     [pscustomobject]@{
         Settings = @($settings)
+        ContractSatisfied = ($contractErrors.Count -eq 0)
+        ContractErrors = $contractErrors
+        Schema = [pscustomobject]@{
+            SchemaId     = $schema.SchemaId
+            RelatedItems = @($schema.RelatedItems)
+            Errors       = @($schema.Errors)
+        }
         PayloadShape = @($decoded.Keys)
         ManagedPropertyKeys = @($decoded.managedProperty | ForEach-Object { & $getProperty $_ 'key' })
         Assignments = @($coverage)
@@ -192,10 +219,17 @@ if ($IncludeChildGsa) {
         }).Count
         DefenderConfigurationCount = $defenderPolicyCount
         ReportedDeviceStatuses = $statusCounts
-        Note = 'Assignment and reported status inventory only; confirm GSA and VPN lockdown on each device after sync.'
+        Note = ('ReportedDeviceStatuses are Intune delivery states, not proof of the on-device GSA toggle; ' +
+            "Private Access is intentionally 0. Confirm GSA is on and locked plus VPN lockdown on each device after sync.")
     } | ConvertTo-Json -Depth 8
-    if (@($settings | Where-Object { -not $_.ForcedOn }).Count -gt 0) {
-        Write-Warning 'Live GSA is not forced on for both keys; deploy the reviewed configuration.'
+    if (-not @($settings | Where-Object { $_.Key -ceq 'Global Secure Access' })[0].ForcedOn) {
+        Write-Warning 'Live main GSA is not typed valueInteger 3 (forced on); deploy the reviewed configuration.'
+    }
+    if ($contractErrors) {
+        Write-Warning "Live child GSA configuration violates the typed contract: $($contractErrors -join ' ')"
+    }
+    if ($schema.Errors) {
+        Write-Warning "Managed Google Play schema does not confirm the GSA key/type contract: $($schema.Errors -join ' ')"
     }
     if ($defenderPolicyCount -gt 1) {
         Write-Warning 'Multiple Defender app configurations exist; review overlapping assignments for conflicts.'
