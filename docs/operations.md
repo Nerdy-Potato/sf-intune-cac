@@ -6,9 +6,9 @@
 2. **CI** validates schemas and safety rules offline and runs the tests. **Plan** comments the diff.
 3. Read the plan. In particular read the *assignment* rows: a one-line edit that changes who a
    policy targets is the change most likely to interrupt somebody's day.
-4. Merge. Deploy plans and applies directly against the merged commit, refusing to apply if the
-   plan is blocked (skipped/prerequisite actions), before asking for approval in the `production`
-   environment.
+4. Merge. Deploy plans and applies directly against the current `main` commit, refusing to apply
+   a blocked plan (skipped/prerequisite actions). The job uses the `production` environment;
+   approval is required only if reviewers are configured there.
 
 An apply is successful only when every requested action is applied. Unmanaged identity conflicts,
 missing prerequisites, and write failures are reported in the applied plan and fail the deployment;
@@ -26,11 +26,25 @@ section with a global unmanaged-object bypass.
 
 ### Re-running a deploy
 
-Deploy runs on every push to `main` and can also be re-run manually (`workflow_dispatch`) - for
+Deploy runs on matching configuration, source, script, or deploy-workflow pushes to `main` and can
+also be run manually (`workflow_dispatch`) - for
 example, redeploying after out-of-band tenant remediation, or re-running a deploy whose automatic
 push-triggered run did not fire. There's no separate recovery procedure: it plans and applies
-against whatever is on `main` at the time it runs, and still refuses to apply a blocked plan
-(skipped/prerequisite actions). The `production` environment's approval gate (configured in
+against its triggering commit only when that commit is still current `main`, and still refuses to
+apply a blocked plan (skipped/prerequisite actions). Before credentialed planning and again
+immediately before apply, `scripts/Assert-CaCDeploymentSource.ps1` requires `GITHUB_REF` to be
+`refs/heads/main` and both `GITHUB_SHA` and checkout `HEAD` to equal the current remote main SHA
+read from the GitHub API. Non-main dispatches, stale reruns, mismatched checkouts, and API lookup
+failures fail explicitly rather than being skipped. Dispatch a new run on `main` after such a
+failure; no peer-review or separate recovery ceremony is required.
+
+These are point-in-time checks, not a lock against a push after verification. Historical workflow
+versions do not acquire the new guards when rerun. Configure the `production` environment's
+deployment branch restriction to allow **only `main`** before relying on it to reject historical
+non-main execution; the October 2 audit found no live environment branch restriction or reviewer
+protection. Branch restrictions alone do not reject an old SHA on `main`: do not rerun historical
+unguarded deploys, and dispatch the current workflow instead. Repository changes here do not
+alter GitHub environment protections. The optional `production` approval gate (configured in
 GitHub, not this repo's workflow code) is the control to use if you want a manual check before
 apply - see [bootstrap.md](bootstrap.md) for setting that up.
 
@@ -132,10 +146,18 @@ The **Inventory Intune apps** workflow runs
 every request is a `GET` and it cannot change anything. Beyond the app object inventory it reports,
 for the child Defender app configuration:
 
-- both decoded Global Secure Access values, warning if either is not forced on;
+- for each Global Secure Access key, the desired typed value next to every actual typed value Intune
+  stores. `ForcedOn` is true only for the native `EnableGSA` key = `valueInteger` `3`, so a string `"3"`
+  doesn't count. `PrivateAccessDisabled` is true only for `GlobalSecureAccessPrivateChannel` =
+  `valueInteger` `0`, and Private Access is intentionally off. `ContractSatisfied`/`ContractErrors`
+  give the overall verdict;
+- the live Managed Google Play schema evidence (the schema id, the GSA-related keys and their data
+  types), with a warning if the schema doesn't type both keys as `integer`;
 - the child user- and device-group include flags and their member counts, and the exclusion count;
 - how many competing Defender app configurations exist, warning when more than one could overlap;
-- the aggregate reported `deviceStatuses`, with no device, user, or tenant identifiers.
+- the aggregate reported `deviceStatuses`, with no device, user, or tenant identifiers. These are
+  Intune delivery states: a policy counted as `compliant` was delivered, but that doesn't show that
+  GSA is on and locked on the device.
 
 Run it twice around a change to this area: once before deploying, to record the starting state, and
 once after, to confirm the reviewed configuration is what the tenant now holds.

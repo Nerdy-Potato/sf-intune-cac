@@ -72,9 +72,15 @@ function New-CaCPlan {
         $remote = $groupCandidates | Select-Object -First 1
 
         if (-not $remote) {
-            Add-Action -Kind 'Group' -Action 'Create' -Target $group.displayName -Data $group -Details @(
-                "members: $($group.members -join ', ')"
-            )
+            $manualMembership = $group.ContainsKey('membershipManagement') -and
+                $group.membershipManagement -eq 'manual'
+            $createDetails = if ($manualMembership) {
+                @('membership is manually managed and will not be populated by this repository')
+            }
+            else {
+                @("members: $($group.members -join ', ')")
+            }
+            Add-Action -Kind 'Group' -Action 'Create' -Target $group.displayName -Data $group -Details $createDetails
             continue
         }
 
@@ -124,6 +130,13 @@ function New-CaCPlan {
 
         if ($group.ContainsKey('memberType') -and $group.memberType -eq 'device') {
             Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group -ObjectId $remote.id
+            continue
+        }
+
+        if ($group.ContainsKey('membershipManagement') -and $group.membershipManagement -eq 'manual') {
+            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group -ObjectId $remote.id -Details @(
+                'membership is manually managed and is not reconciled by this repository'
+            )
             continue
         }
 
@@ -280,7 +293,11 @@ function New-CaCPlan {
             $adopted = $false
 
             if (-not $remote) {
-                Add-Action -Kind 'Policy' -Action 'Create' -Target $policy.payload.displayName -Data $policy -Details @("resource: $resource") `
+                $createDetails = @("resource: $resource")
+                if (Test-CaCChildGsaPolicy $policy) {
+                    $createDetails += @(Get-CaCChildGsaPlanFindings -GraphInvoker $GraphInvoker)
+                }
+                Add-Action -Kind 'Policy' -Action 'Create' -Target $policy.payload.displayName -Data $policy -Details $createDetails `
                     -RequiresPortalApply $requiresPortalApply
                 Add-Action -Kind 'Assignment' -Action 'Update' -Target $policy.payload.displayName -Data $policy -Details @(
                     ($policy.assignments | ForEach-Object { "$($_.intent) $($_.group)" })
@@ -340,12 +357,20 @@ function New-CaCPlan {
                 $actualForDrift = $remote | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable
                 $actualForDrift['settings'] = @($settingsResponse.value | Where-Object { $_ })
             }
+            elseif ($resource -eq 'mobileAppConfigurations') {
+                # Never diff managed app configuration content against the list response: compare
+                # the full object Graph returns for this id, so payloadJson is the stored value.
+                $actualForDrift = & $GraphInvoker 'GET' "$($endpoint.Path)/$($remote.id)" $null
+            }
 
             $drift = if ($targetResolutionError) {
                 @("target app dependency: $targetResolutionError")
             }
             else {
                 @(Get-CaCPayloadDrift -Desired $desiredPayload -Actual $actualForDrift)
+            }
+            if (Test-CaCChildGsaPolicy $policy) {
+                $drift = @($drift) + @(Get-CaCChildGsaPlanFindings -GraphInvoker $GraphInvoker)
             }
             if ($adopted) {
                 $drift = @($drift | Where-Object { $_ -notlike 'description:*' })

@@ -34,9 +34,17 @@ Describe 'Repository configuration' {
         }
     }
 
-    It 'places the younger children in the teen tier' {
-        ($script:Config.Users | Where-Object id -EQ 'lucas').tier | Should -Be 'teen'
+    It 'records tier metadata without deriving manually managed group membership' {
+        $lucas = $script:Config.Users | Where-Object id -EQ 'lucas'
+        $lucas.tier | Should -Be 'teen'
         ($script:Config.Users | Where-Object id -EQ 'adalynn').tier | Should -Be 'teen'
+
+        $tierGroups = @($script:Config.Groups | Where-Object id -in @(
+                'sg-tier-adult', 'sg-tier-teen', 'sg-tier-child'
+            ))
+        $tierGroups | Should -HaveCount 3
+        @($tierGroups | Where-Object membershipManagement -NE 'manual') | Should -BeNullOrEmpty
+        @($tierGroups | ForEach-Object { $_.members }) | Should -BeNullOrEmpty
     }
 
     It 'confirms the three youngest children in the child tier' {
@@ -149,7 +157,7 @@ Describe 'Repository configuration' {
             , $group.members | Should -BeOfType [System.Object[]]
         }
 
-        ($script:Config.Groups | Where-Object id -EQ 'sg-tier-teen').members.Count | Should -Be 2
+        ($script:Config.Groups | Where-Object id -EQ 'sg-tier-teen').members.Count | Should -Be 0
     }
 
     It 'never assigns a policy to all users or all devices' {

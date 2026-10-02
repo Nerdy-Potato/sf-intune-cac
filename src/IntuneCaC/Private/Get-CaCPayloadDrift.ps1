@@ -13,6 +13,11 @@ function Get-CaCPayloadDrift {
         arrays-of-objects. Per design (.squad/decisions/inbox/morpheus-local-admin-settings-catalog-
         design.md) this is a deliberate v1 minimal-risk choice: whole-payload diffing, not per-setting
         deep diff. Without this, changes to `settings` would never be detected as drift.
+
+        Exception: managed app configuration `payloadJson` is base64 JSON. It is decoded and its
+        kind, productId and managedProperty entries are compared by key, value field and typed
+        value (ordinal, order-independent), so valueString "3" never equals valueInteger 3 and a
+        case-insensitive raw base64 comparison can no longer hide a change.
     #>
     [CmdletBinding()]
     param(
@@ -66,10 +71,50 @@ function Get-CaCPayloadDrift {
         return $Value
     }
 
+    function ConvertTo-CaCManagedConfigurationComparable {
+        param($Decoded)
+
+        $properties = foreach ($property in @(Get-CaCProperty $Decoded 'managedProperty')) {
+            if ($null -eq $property) { continue }
+            ConvertTo-CaCSettingsComparable -Value $property
+        }
+        $sorted = @($properties | Sort-Object -Property @{ Expression = { [string] $_['key'] } } -CaseSensitive)
+        return ([ordered]@{
+                kind            = Get-CaCProperty $Decoded 'kind'
+                productId       = Get-CaCProperty $Decoded 'productId'
+                managedProperty = $sorted
+            } | ConvertTo-Json -Depth 50 -Compress)
+    }
+
     foreach ($name in @($Desired.Keys)) {
         if ($name -in @('@odata.type', 'displayName')) { continue }
 
         $desiredValue = $Desired[$name]
+
+        if ($name -eq 'payloadJson' -and $desiredValue -is [string]) {
+            $desiredDecoded = $null
+            try { $desiredDecoded = ConvertFrom-CaCManagedConfigurationPayload $desiredValue } catch { $desiredDecoded = $null }
+            if ($null -ne $desiredDecoded) {
+                $actualDecoded = $null
+                try {
+                    $actualDecoded = ConvertFrom-CaCManagedConfigurationPayload ([string] (Get-CaCProperty -InputObject $Actual -Name $name))
+                }
+                catch {
+                    $drift.Add("payloadJson: <live managed configuration missing or unreadable: $($_.Exception.Message)>")
+                    continue
+                }
+                if ((ConvertTo-CaCManagedConfigurationComparable $desiredDecoded) -cne
+                    (ConvertTo-CaCManagedConfigurationComparable $actualDecoded)) {
+                    $drift.Add(("payloadJson: managed configuration '{0}' -> '{1}'" -f
+                            (Get-CaCManagedConfigurationSummary $actualDecoded), (Get-CaCManagedConfigurationSummary $desiredDecoded)))
+                }
+                continue
+            }
+            if ([string] (Get-CaCProperty -InputObject $Actual -Name $name) -cne $desiredValue) {
+                $drift.Add('payloadJson: <value differs>')
+            }
+            continue
+        }
 
         if ($name -eq 'omaSettings') {
             $actualSettings = @(Get-CaCProperty -InputObject $Actual -Name $name)

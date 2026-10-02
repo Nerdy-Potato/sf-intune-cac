@@ -1,8 +1,8 @@
 {
   "$schema": "../../schemas/groups.schema.json",
   "comment": [
-    "Assignment groups. Membership is calculated from config/identity/users.json so that the",
-    "tier a person sits in is the only thing anyone has to edit when a child gets older.",
+    "Assignment groups. Membership of CaC-Tier-Adult/Teen/Child is manually managed in Entra;",
+    "this repository never reads or reconciles membership for those groups.",
     "Tier groups (sg-tier-*) are assigned (static) rather than dynamic: dynamic rules would need",
     "attributes we deliberately do not store (age / date of birth), and static membership is far",
     "easier to review.",
@@ -21,7 +21,8 @@
       "mailNickname": "cac-tier-adult",
       "description": "Parents. Full privileges, security-only restrictions.",
       "purpose": "assignment",
-      "membership": { "source": "tier", "values": ["adult"] }
+      "membershipManagement": "manual",
+      "membership": { "source": "explicit", "values": [] }
     },
     {
       "id": "sg-tier-teen",
@@ -29,7 +30,8 @@
       "mailNickname": "cac-tier-teen",
       "description": "14-17. Security baseline plus light content controls; apps are blocklisted, not allowlisted.",
       "purpose": "assignment",
-      "membership": { "source": "tier", "values": ["teen"] }
+      "membershipManagement": "manual",
+      "membership": { "source": "explicit", "values": [] }
     },
     {
       "id": "sg-tier-child",
@@ -37,7 +39,8 @@
       "mailNickname": "cac-tier-child",
       "description": "13 and under. Strictest tier: approved apps only, forced web filtering, tight device controls.",
       "purpose": "assignment",
-      "membership": { "source": "tier", "values": ["child"] }
+      "membershipManagement": "manual",
+      "membership": { "source": "explicit", "values": [] }
     },
     {
       "id": "sg-devices-adult",

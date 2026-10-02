@@ -19,6 +19,89 @@ BeforeAll {
         ConvertFrom-Json
 }
 
+Describe 'Deployment source freshness' {
+    BeforeAll {
+        $script:SourceGuard = Join-Path $script:RepoRoot 'scripts/Assert-CaCDeploymentSource.ps1'
+    }
+
+    BeforeEach {
+        $script:CurrentSha = 'a' * 40
+        Mock git {
+            $global:LASTEXITCODE = 0
+            'a' * 40
+        }
+        Mock Invoke-RestMethod {
+            @{ ref = 'refs/heads/main'; object = @{ sha = ('a' * 40) } }
+        }
+        $script:GuardArguments = @{
+            Repository = 'Nerdy-Potato/sf-intune-cac'
+            Ref = 'refs/heads/main'
+            CommitSha = $script:CurrentSha
+            Token = 'test-token'
+        }
+    }
+
+    It 'accepts only a matching checkout and current remote main through the authenticated API' {
+        { & $script:SourceGuard @script:GuardArguments } | Should -Not -Throw
+        Should -Invoke Invoke-RestMethod -Times 1 -Exactly -ParameterFilter {
+            $Method -eq 'Get' -and
+            $Uri -eq 'https://api.github.com/repos/Nerdy-Potato/sf-intune-cac/git/ref/heads/main' -and
+            $Headers.Authorization -eq 'Bearer test-token'
+        }
+    }
+
+    It 'fails explicitly for an off-main dispatch before looking up remote main' {
+        $script:GuardArguments.Ref = 'refs/heads/old-policy'
+        { & $script:SourceGuard @script:GuardArguments } | Should -Throw '*requires refs/heads/main*'
+        Should -Invoke Invoke-RestMethod -Times 0 -Exactly
+    }
+
+    It 'rejects a stale triggering SHA even when checkout matches that SHA' {
+        Mock Invoke-RestMethod {
+            @{ ref = 'refs/heads/main'; object = @{ sha = ('b' * 40) } }
+        }
+        { & $script:SourceGuard @script:GuardArguments } | Should -Throw '*commit is stale*'
+    }
+
+    It 'rejects a mismatched checkout even when GITHUB_SHA is current main' {
+        Mock git { $global:LASTEXITCODE = 0; 'b' * 40 }
+        { & $script:SourceGuard @script:GuardArguments } | Should -Throw '*checkout HEAD does not match*'
+        Should -Invoke Invoke-RestMethod -Times 0 -Exactly
+    }
+
+    It 'fails closed on API lookup failure without exposing its response' {
+        Mock Invoke-RestMethod { throw 'sensitive response must not be logged' }
+        { & $script:SourceGuard @script:GuardArguments } |
+            Should -Throw 'Cannot verify current remote main through the GitHub API. Nothing may be deployed.'
+    }
+
+    It 'fails closed on a malformed API main response' {
+        Mock Invoke-RestMethod { @{ ref = 'refs/heads/main'; object = @{ sha = 'invalid' } } }
+        { & $script:SourceGuard @script:GuardArguments } | Should -Throw '*Cannot verify current remote main*'
+    }
+
+    It 'fails closed when checkout HEAD cannot be read' {
+        Mock git { $global:LASTEXITCODE = 1; 'invalid' }
+        { & $script:SourceGuard @script:GuardArguments } | Should -Throw '*Cannot verify the deployment checkout HEAD*'
+    }
+
+    It 'requires a token before attempting a GitHub API lookup' {
+        $script:GuardArguments.Token = ''
+        { & $script:SourceGuard @script:GuardArguments } | Should -Throw '*GitHub token*'
+        Should -Invoke Invoke-RestMethod -Times 0 -Exactly
+    }
+
+    It 'runs the guard before credentialed planning and immediately before apply without skipping non-main jobs' {
+        $script:DeployWorkflow | Should -Match '(?s)Verify current main before tenant planning.*?Assert-CaCDeploymentSource\.ps1\s+.*?- name: Plan \(read-only\)'
+        $script:DeployWorkflow | Should -Match '(?s)Verify current main immediately before apply.*?Assert-CaCDeploymentSource\.ps1\s+.*?- name: Apply'
+        ([regex]::Matches($script:DeployWorkflow, 'run: ./scripts/Assert-CaCDeploymentSource\.ps1')).Count |
+            Should -Be 2
+        ([regex]::Matches($script:DeployWorkflow, 'GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}')).Count |
+            Should -Be 2
+        $script:DeployWorkflow | Should -Not -Match '(?m)^\s*if:.*github\.ref'
+    }
+}
+
 Describe 'Deployment action propagation' {
     It 'returns a skipped result when an app assignment has no resolvable app id' {
         $plan = [pscustomobject]@{

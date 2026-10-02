@@ -40,7 +40,10 @@ function Get-CaCConfiguration {
     }
 
     foreach ($group in $groups) {
-        if ($group.ContainsKey('memberType') -and $group.memberType -eq 'device') {
+        $membershipManuallyManaged = $group.ContainsKey('membershipManagement') -and
+            $group.membershipManagement -eq 'manual'
+        if ($membershipManuallyManaged -or
+            ($group.ContainsKey('memberType') -and $group.memberType -eq 'device')) {
             $group['members'] = @()
             continue
         }

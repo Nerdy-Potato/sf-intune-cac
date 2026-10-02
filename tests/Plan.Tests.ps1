@@ -133,6 +133,21 @@ BeforeAll {
         return $state
     }
 
+    function ConvertTo-GsaPayloadJson {
+        param([object[]] $ManagedProperty)
+        $document = [ordered]@{
+            kind            = 'androidenterprise#managedConfiguration'
+            productId       = 'app:com.microsoft.scmx'
+            managedProperty = $ManagedProperty
+        }
+        [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($document | ConvertTo-Json -Depth 10 -Compress)))
+    }
+
+    function Get-GsaRemote {
+        param([hashtable] $State)
+        $State.Policies.mobileAppConfigurations | Where-Object displayName -EQ 'CaC - Android - Defender and GSA (Child)'
+    }
+
     function New-FakeInvoker {
         param([hashtable] $State)
 
@@ -158,6 +173,27 @@ BeforeAll {
                 '/assignments$' {
                     $policyId = ($Uri -split '/')[-2]
                     return [pscustomobject]@{ value = @($State.Assignments[$policyId]) }
+                }
+                '^deviceManagement/androidManagedStoreAppConfigurationSchemas/(?<id>[^/]+)$' {
+                    if ($State.ContainsKey('SchemaError')) { throw $State.SchemaError }
+                    if ($State.ContainsKey('Schema')) { return $State.Schema }
+                    # Shape documented for androidManagedStoreAppConfigurationSchema (value-wrapped).
+                    return [pscustomobject]@{ value = [pscustomobject]@{
+                            id                = $Matches.id
+                            schemaItems       = @(
+                                [pscustomobject]@{ schemaItemKey = 'EnableGSA'; displayName = 'Global Secure Access'; dataType = 'integer' },
+                                [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; displayName = 'Private Access'; dataType = 'integer' }
+                            )
+                            nestedSchemaItems = @()
+                        } }
+                }
+                '^deviceAppManagement/mobileAppConfigurations/(?<id>[^/]+)$' {
+                    $object = @($State.Policies['mobileAppConfigurations'] | Where-Object id -EQ $Matches.id | Select-Object -First 1)
+                    if (-not $object) { throw "404 $Uri" }
+                    if ($State.ContainsKey('FullReadOverride') -and $State.FullReadOverride.ContainsKey($Matches.id)) {
+                        return $State.FullReadOverride[$Matches.id]
+                    }
+                    return $object[0]
                 }
                 default {
                     # targetedMobileApps (for any mobileAppConfigurations policy) is already set
@@ -257,15 +293,150 @@ Describe 'Get-CaCPayloadDrift' {
             Get-CaCPayloadDrift -Desired $desired -Actual $actual | Should -BeNullOrEmpty
         }
     }
+
+    It 'compares managed app configuration payloadJson by typed value, not raw base64 or loose equality' {
+        $desired = @{ payloadJson = ConvertTo-GsaPayloadJson @(
+                @{ key = 'EnableGSA'; valueInteger = 3 },
+                @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 }) }
+        $reordered = @{ payloadJson = ConvertTo-GsaPayloadJson @(
+                @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 },
+                @{ key = 'EnableGSA'; valueInteger = 3 }) }
+        $stringTyped = @{ payloadJson = ConvertTo-GsaPayloadJson @(
+                @{ key = 'EnableGSA'; valueString = '3' },
+                @{ key = 'GlobalSecureAccessPrivateChannel'; valueString = '0' }) }
+        $lowerKey = @{ payloadJson = ConvertTo-GsaPayloadJson @(
+                @{ key = 'enablegsa'; valueInteger = 3 },
+                @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 }) }
+        InModuleScope IntuneCaC -Parameters @{ D = $desired; R = $reordered; S = $stringTyped; L = $lowerKey } {
+            param($D, $R, $S, $L)
+            Get-CaCPayloadDrift $D $R | Should -BeNullOrEmpty
+            $drift = @(Get-CaCPayloadDrift $D $S)
+            $drift.Count | Should -Be 1
+            $drift[0] | Should -BeLike '*valueString:"3"*valueInteger:3*'
+            @(Get-CaCPayloadDrift $D $L).Count | Should -Be 1
+            @(Get-CaCPayloadDrift $D @{}) | Should -BeLike 'payloadJson: <live managed configuration missing*'
+        }
+    }
+}
+
+Describe 'Child Android GSA plan and apply guards' {
+    It 'diffs the full per-object read so a list response cannot hide or invent payload drift' {
+        $state = New-FakeTenant -InSync
+        $gsa = Get-GsaRemote $state
+        $drifted = $gsa | Select-Object *
+        $drifted.payloadJson = ConvertTo-GsaPayloadJson @(
+            @{ key = 'EnableGSA'; valueInteger = 1 },
+            @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 })
+        $state.FullReadOverride = @{ $gsa.id = $drifted }
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+        $update = @($plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'Update' -and $_.Target -eq $gsa.displayName })
+        $update.Count | Should -Be 1
+        ($update[0].Details -join ' ') | Should -BeLike '*EnableGSA=valueInteger:1*EnableGSA=valueInteger:3*'
+        @($state.Calls | Where-Object { $_.Method -eq 'GET' -and $_.Uri -eq "deviceAppManagement/mobileAppConfigurations/$($gsa.id)" }).Count |
+            Should -BeGreaterThan 0
+    }
+
+    It 'fails closed for the GSA policy only when the live schema key or type does not match' -ForEach @(
+        @{ Name = 'string type'; Items = @(
+                [pscustomobject]@{ schemaItemKey = 'EnableGSA'; dataType = 'string' },
+                [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; dataType = 'integer' }) }
+        @{ Name = 'missing main key'; Items = @(
+                [pscustomobject]@{ schemaItemKey = 'Global Secure Access'; displayName = 'Global Secure Access'; dataType = 'integer' },
+                [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; dataType = 'integer' }) }
+    ) {
+        $state = New-FakeTenant -InSync
+        $gsa = Get-GsaRemote $state
+        $state.Schema = [pscustomobject]@{ schemaItems = $Items }
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+        $update = @($plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Target -eq $gsa.displayName })
+        $update.Action | Should -Be 'Update'
+        ($update.Details -join ' ') | Should -BeLike '*gsa schema contract*'
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state) -Confirm:$false
+        @($results | Where-Object { $_.Status -eq 'Failed' -and $_.Target -eq $gsa.displayName }).Message |
+            Should -BeLike 'refusing to write child GSA configuration*'
+        @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'fails closed without writing when the schema cannot be read' {
+        $state = New-FakeTenant -InSync
+        $gsa = Get-GsaRemote $state
+        $gsa.payloadJson = ConvertTo-GsaPayloadJson @(
+            @{ key = 'EnableGSA'; valueInteger = 0 },
+            @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 })
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+        $state.SchemaError = 'Forbidden'
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state) -Confirm:$false
+        @($results | Where-Object { $_.Status -eq 'Failed' -and $_.Target -eq $gsa.displayName }).Count | Should -Be 1
+        @($state.Calls | Where-Object { $_.Method -eq 'PATCH' }) | Should -BeNullOrEmpty
+    }
+
+    It 'reports Failed when the post-write readback does not return the typed contract' {
+        $state = New-FakeTenant -InSync
+        $gsa = Get-GsaRemote $state
+        $gsa.payloadJson = ConvertTo-GsaPayloadJson @(
+            @{ key = 'EnableGSA'; valueInteger = 1 },
+            @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 })
+        $invoker = New-FakeInvoker $state
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $invoker
+        # The fake accepts the PATCH but never stores it, like a silently coerced/dropped value.
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+        $failed = @($results | Where-Object { $_.Status -eq 'Failed' -and $_.Target -eq $gsa.displayName })
+        $failed.Count | Should -Be 1
+        $failed[0].Message | Should -BeLike "post-write readback*'EnableGSA' must be valueInteger:3*found valueInteger:1*"
+    }
+
+    It 'stale-plan guard: re-verifies a NoChange GSA policy at apply time and fails it if it drifted' -ForEach @(
+        @{ Name = 'main toggled to 1'; Mutate = { param($s, $g)
+                $g.payloadJson = ConvertTo-GsaPayloadJson @(
+                    @{ key = 'EnableGSA'; valueInteger = 1 },
+                    @{ key = 'GlobalSecureAccessPrivateChannel'; valueInteger = 0 }) } }
+        @{ Name = 'exclusion added'; Mutate = { param($s, $g)
+                $s.Assignments[$g.id] = @($s.Assignments[$g.id]) + [pscustomobject]@{
+                    target = [pscustomobject]@{ '@odata.type' = '#microsoft.graph.exclusionGroupAssignmentTarget'; groupId = 'group-x' } } } }
+        @{ Name = 'child group removed'; Mutate = { param($s, $g) $s.Assignments[$g.id] = @($s.Assignments[$g.id] | Select-Object -First 1) } }
+        @{ Name = 'schema changed after planning'; Mutate = { param($s, $g)
+                $s.Schema = [pscustomobject]@{ schemaItems = @(
+                    [pscustomobject]@{ schemaItemKey = 'EnableGSA'; dataType = 'string' },
+                    [pscustomobject]@{ schemaItemKey = 'GlobalSecureAccessPrivateChannel'; dataType = 'integer' }
+                ) } } }
+    ) {
+        $state = New-FakeTenant -InSync
+        $gsa = Get-GsaRemote $state
+        $invoker = New-FakeInvoker $state
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $invoker
+        @($plan | Where-Object { $_.Target -eq $gsa.displayName }).Action | Should -Be 'NoChange'
+        & $Mutate $state $gsa
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+        $failed = @($results | Where-Object { $_.Status -eq 'Failed' })
+        $failed.Count | Should -Be 1
+        $failed[0].Action | Should -Be 'Verify policy'
+        $failed[0].Message | Should -BeLike 'child GSA drifted since the reviewed plan*'
+        @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+    }
+
+    It 'verifies child group assignments after assigning the GSA policy' {
+        $state = New-FakeTenant -InSync
+        $gsa = Get-GsaRemote $state
+        $state.Assignments[$gsa.id] = @($state.Assignments[$gsa.id] | Select-Object -First 1)
+        $invoker = New-FakeInvoker $state
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $invoker
+        @($plan | Where-Object { $_.Kind -eq 'Assignment' -and $_.Target -eq $gsa.displayName }).Count | Should -Be 1
+        # The fake accepts the assign POST without storing it, so readback still lacks a group.
+        $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config -GraphInvoker $invoker -Confirm:$false
+        $failed = @($results | Where-Object { $_.Status -eq 'Failed' -and $_.Action -eq 'Assign policy' })
+        $failed.Count | Should -Be 1
+        $failed[0].Message | Should -BeLike "post-assign readback*is not included*"
+    }
 }
 
 Describe 'New-CaCPlan' {
-    It 'repairs disabled GSA values through a reviewed plan and remains enabled on repeated plan/apply' {
+    It 'repairs the previously pinned string-typed GSA values through a reviewed plan and stays typed on repeated plan/apply' {
         $state = New-FakeTenant -InSync
-        $gsa = $state.Policies.mobileAppConfigurations | Where-Object displayName -EQ 'CaC - Android - Defender and GSA (Child)'
-        $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($gsa.payloadJson)) | ConvertFrom-Json
-        foreach ($setting in $decoded.managedProperty) { $setting.valueString = '0' }
-        $gsa.payloadJson = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($decoded | ConvertTo-Json -Depth 10 -Compress)))
+        $gsa = Get-GsaRemote $state
+        # The observed regression: UI label used as a key, and both values serialized as strings.
+        $gsa.payloadJson = ConvertTo-GsaPayloadJson @(
+            @{ key = 'Global Secure Access'; valueString = '3' },
+            @{ key = 'GlobalSecureAccessPrivateChannel'; valueString = '3' })
         $readInvoker = New-FakeInvoker $state
         $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker $readInvoker
         $updates = @($plan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -eq 'Update' -and $_.Target -eq $gsa.displayName })
@@ -281,7 +452,10 @@ Describe 'New-CaCPlan' {
         $results = Invoke-CaCPlan -Plan $roundTripped -Configuration $script:Config -GraphInvoker $writer -Confirm:$false
         @($results | Where-Object Status -EQ 'Failed') | Should -BeNullOrEmpty
         $applied = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($gsa.payloadJson)) | ConvertFrom-Json
-        $applied.managedProperty.valueString | Should -Be @('3', '3')
+        $applied.managedProperty.key | Should -Be @('EnableGSA', 'GlobalSecureAccessPrivateChannel')
+        $applied.managedProperty.valueInteger | Should -Be @(3, 0)
+        $applied.managedProperty[0].valueInteger | Should -BeOfType [long]
+        @($applied.managedProperty | Where-Object { $_.PSObject.Properties['valueString'] }) | Should -BeNullOrEmpty
         $second = New-CaCPlan -Configuration $script:Config -GraphInvoker $readInvoker
         @($second | Where-Object { $_.Target -eq $gsa.displayName -and $_.Action -ne 'NoChange' }) | Should -BeNullOrEmpty
         $before = @($state.Calls | Where-Object Method -NE 'GET').Count
@@ -565,21 +739,114 @@ Describe 'New-CaCPlan' {
         }
     }
 
-    Context 'when a member joins a tier' {
+    Context 'when manually managed tier group membership differs from config' {
         BeforeAll {
             $script:MemberState = New-FakeTenant -InSync
-            $childGroup = @($script:MemberState.Groups | Where-Object displayName -EQ 'CaC-Tier-Child')[0]
-            $script:MemberState.Members[$childGroup.id] = @($script:MemberState.Members[$childGroup.id] | Select-Object -Skip 1)
+            $script:TierGroups = @($script:Config.Groups | Where-Object {
+                    $_.ContainsKey('membershipManagement') -and $_.membershipManagement -eq 'manual'
+                })
+            foreach ($tierGroup in $script:TierGroups) {
+                $remoteGroup = $script:MemberState.Groups | Where-Object displayName -EQ $tierGroup.displayName
+                $script:MemberState.Members[$remoteGroup.id] = @(
+                    [pscustomobject]@{ id = "manual-$($tierGroup.id)"; userPrincipalName = 'manual.member@example.com' }
+                )
+            }
 
+            $managedGroup = $script:Config.Groups | Where-Object id -EQ 'sg-productivity-all'
+            $managedRemoteGroup = $script:MemberState.Groups | Where-Object displayName -EQ $managedGroup.displayName
+            $script:MemberState.Members[$managedRemoteGroup.id] = @(
+                $script:MemberState.Members[$managedRemoteGroup.id] | Select-Object -Skip 1
+            )
             $script:MemberPlan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $script:MemberState)
         }
 
-        It 'plans the missing membership without touching the policies' {
+        It 'does not read or plan membership changes for any tier group' {
+            foreach ($tierGroup in $script:TierGroups) {
+                $remoteGroup = $script:MemberState.Groups | Where-Object displayName -EQ $tierGroup.displayName
+                @($script:MemberState.Calls | Where-Object {
+                        $_.Uri -eq "groups/$($remoteGroup.id)/members?`$select=id,userPrincipalName"
+                    }) | Should -BeNullOrEmpty
+                @($script:MemberPlan | Where-Object {
+                        $_.Kind -eq 'GroupMembership' -and $_.Target -eq $tierGroup.displayName
+                    }) | Should -BeNullOrEmpty
+            }
+        }
+
+        It 'continues reconciling membership for other managed groups' {
             $membership = @($script:MemberPlan | Where-Object Kind -EQ 'GroupMembership')
             $membership.Count | Should -Be 1
+            $membership[0].Target | Should -Be 'CaC-Productivity-All'
             $membership[0].Details -join ' ' | Should -BeLike '*add:*'
             @($script:MemberPlan | Where-Object { $_.Kind -eq 'Policy' -and $_.Action -ne 'NoChange' }) | Should -BeNullOrEmpty
         }
+    }
+
+    It 'creates a missing manually managed tier group without adding members' {
+        $state = New-FakeTenant
+        $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
+        $tierCreates = @($plan | Where-Object {
+                $_.Kind -eq 'Group' -and $_.Action -eq 'Create' -and
+                $_.Data.ContainsKey('membershipManagement') -and
+                $_.Data.membershipManagement -eq 'manual'
+            })
+
+        $tierCreates | Should -HaveCount 3
+        @($tierCreates | Where-Object { $_.Details -join ' ' -notlike '*membership is manually managed*' }) |
+            Should -BeNullOrEmpty
+
+        $results = Invoke-CaCPlan -Plan $tierCreates -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        @($results | Where-Object { $_.Action -eq 'Create group' -and $_.Status -ne 'Applied' }) |
+            Should -BeNullOrEmpty
+        @($state.Calls | Where-Object { $_.Uri -match '^groups/[^/]+/members/\$ref$' }) |
+            Should -BeNullOrEmpty
+    }
+
+    It 'skips stale membership actions for manually managed tier groups' {
+        $state = New-FakeTenant
+        $staleAction = [pscustomobject]@{
+            Kind   = 'GroupMembership'
+            Action = 'Update'
+            Target = 'CaC-Tier-Child'
+            Data   = [pscustomobject]@{
+                GroupKey = 'sg-tier-child'
+                GroupId  = 'tier-child-id'
+                Add      = @('lucas@spaid.family')
+                Remove   = @()
+            }
+        }
+
+        $results = Invoke-CaCPlan -Plan @($staleAction) -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        $results[0].Status | Should -Be 'Skipped'
+        $results[0].Message | Should -BeLike '*manually managed*'
+        $state.Calls | Should -BeNullOrEmpty
+    }
+
+    It 'does not populate a manually managed group from a stale create action' {
+        $state = New-FakeTenant
+        $staleAction = [pscustomobject]@{
+            Kind   = 'Group'
+            Action = 'Create'
+            Target = 'CaC-Tier-Child'
+            Data   = [pscustomobject]@{
+                id          = 'obsolete-tier-child-key'
+                displayName = 'CaC-Tier-Child'
+                mailNickname = 'cac-tier-child'
+                description = 'Child tier'
+                members = @('lucas@spaid.family')
+            }
+        }
+
+        $results = Invoke-CaCPlan -Plan @($staleAction) -Configuration $script:Config `
+            -GraphInvoker (New-FakeInvoker -State $state) -Confirm:$false
+
+        @($results | Where-Object { $_.Action -eq 'Create group' -and $_.Status -ne 'Applied' }) |
+            Should -BeNullOrEmpty
+        @($state.Calls | Where-Object { $_.Uri -match '^groups/[^/]+/members/\$ref$' }) |
+            Should -BeNullOrEmpty
     }
 
     Context 'RequiresPortalApply propagation for deviceEnrollmentConfigurations' {
@@ -806,10 +1073,10 @@ Describe 'Invoke-CaCPlan' {
         @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
     }
 
-    It 'applies a JSON-round-tripped reviewed plan without rediscovering ids' {
+    It 'applies a JSON-round-tripped managed-group membership plan without rediscovering ids' {
         $planState = New-FakeTenant -InSync
-        $childGroup = @($planState.Groups | Where-Object displayName -EQ 'CaC-Tier-Child')[0]
-        $planState.Members[$childGroup.id] = @($planState.Members[$childGroup.id] | Select-Object -Skip 1)
+        $managedGroup = @($planState.Groups | Where-Object displayName -EQ 'CaC-Productivity-All')[0]
+        $planState.Members[$managedGroup.id] = @($planState.Members[$managedGroup.id] | Select-Object -Skip 1)
         $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $planState)
         $roundTripped = $plan | ConvertTo-Json -Depth 50 | ConvertFrom-Json
 

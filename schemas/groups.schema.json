@@ -22,6 +22,11 @@
           "description": { "type": "string", "minLength": 1 },
           "purpose": { "type": "string", "enum": ["assignment", "exclusion"] },
           "memberType": { "type": "string", "enum": ["user", "device"] },
+          "membershipManagement": {
+            "type": "string",
+            "enum": ["manual"],
+            "description": "When manual, this repository does not read or reconcile group membership."
+          },
           "membership": {
             "type": "object",
             "additionalProperties": false,
