@@ -829,7 +829,7 @@ Describe 'New-CaCPlan' {
             Action = 'Create'
             Target = 'CaC-Tier-Child'
             Data   = [pscustomobject]@{
-                id          = 'sg-tier-child'
+                id          = 'obsolete-tier-child-key'
                 displayName = 'CaC-Tier-Child'
                 mailNickname = 'cac-tier-child'
                 description = 'Child tier'
