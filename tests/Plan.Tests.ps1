@@ -742,7 +742,9 @@ Describe 'New-CaCPlan' {
     Context 'when manually managed tier group membership differs from config' {
         BeforeAll {
             $script:MemberState = New-FakeTenant -InSync
-            $script:TierGroups = @($script:Config.Groups | Where-Object membershipManagement -EQ 'manual')
+            $script:TierGroups = @($script:Config.Groups | Where-Object {
+                    $_.ContainsKey('membershipManagement') -and $_.membershipManagement -eq 'manual'
+                })
             foreach ($tierGroup in $script:TierGroups) {
                 $remoteGroup = $script:MemberState.Groups | Where-Object displayName -EQ $tierGroup.displayName
                 $script:MemberState.Members[$remoteGroup.id] = @(
@@ -784,6 +786,7 @@ Describe 'New-CaCPlan' {
         $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $state)
         $tierCreates = @($plan | Where-Object {
                 $_.Kind -eq 'Group' -and $_.Action -eq 'Create' -and
+                $_.Data.ContainsKey('membershipManagement') -and
                 $_.Data.membershipManagement -eq 'manual'
             })
 
