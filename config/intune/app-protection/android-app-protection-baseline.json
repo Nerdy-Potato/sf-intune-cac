@@ -1,9 +1,9 @@
 {
   "$schema": "../../../schemas/policy.schema.json",
-  "comment": "Android counterpart of the iOS app protection baseline. Same posture, Android-specific controls.",
+  "comment": "Android counterpart of the iOS app protection baseline. Same posture, Android-specific controls. Included users come from the existing EveryoneButDad-SG dynamic group, not all productivity accounts, so John is outside MAM scope.",
   "name": "android-app-protection-baseline",
   "resource": "androidManagedAppProtections",
-  "assignments": [{ "group": "sg-productivity-all", "intent": "include" }],
+  "assignments": [{ "group": "sg-everyone-but-john", "intent": "include" }],
   "apps": [
     {
       "mobileAppIdentifier": {

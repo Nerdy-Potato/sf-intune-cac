@@ -22,6 +22,11 @@
           "description": { "type": "string", "minLength": 1 },
           "purpose": { "type": "string", "enum": ["assignment", "exclusion"] },
           "memberType": { "type": "string", "enum": ["user", "device"] },
+          "externalObjectId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Read-only reference to an existing Entra security group. Never created, adopted, or reconciled by this repository."
+          },
           "membershipManagement": {
             "type": "string",
             "enum": ["manual"],

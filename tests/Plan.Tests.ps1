@@ -22,9 +22,21 @@ BeforeAll {
             Calls       = [System.Collections.Generic.List[object]]::new()
         }
 
+        foreach ($group in $script:Config.Groups | Where-Object { $_.ContainsKey('externalObjectId') }) {
+            $state.Groups += [pscustomobject]@{
+                id = $group.externalObjectId
+                displayName = $group.displayName
+                description = $null
+                securityEnabled = $true
+                mailEnabled = $false
+                groupTypes = @('DynamicMembership')
+            }
+        }
+
         if ($InSync) {
             $index = 0
             foreach ($group in $script:Config.Groups) {
+                if ($group.ContainsKey('externalObjectId')) { continue }
                 $index++
                 $objectId = "group-$index"
                 $state.Groups += [pscustomobject]@{
@@ -471,15 +483,17 @@ Describe 'New-CaCPlan' {
         @($plan | Where-Object { $_.Target -eq $laps.displayName -and $_.Action -eq 'Update' }).Count | Should -Be 1
     }
 
-    Context 'against an empty tenant' {
+    Context 'against a tenant with only external group prerequisites' {
         BeforeAll {
             $script:EmptyState = New-FakeTenant
             $script:EmptyPlan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $script:EmptyState)
         }
 
-        It 'creates every group defined in the repository' {
+        It 'creates only repository-owned groups, never external references' {
             $created = @($script:EmptyPlan | Where-Object { $_.Kind -eq 'Group' -and $_.Action -eq 'Create' })
-            $created.Count | Should -Be $script:Config.Groups.Count
+            $created.Count | Should -Be @($script:Config.Groups | Where-Object {
+                    -not $_.ContainsKey('externalObjectId')
+                }).Count
         }
 
         It 'creates every enabled policy defined in the repository' {
@@ -511,6 +525,113 @@ Describe 'New-CaCPlan' {
         BeforeAll {
             $script:SyncState = New-FakeTenant -InSync
             $script:SyncPlan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker -State $script:SyncState)
+        }
+
+        Context 'external management scope' {
+            It 'references the dynamic group without reading membership or adding a managed marker' {
+                $state = New-FakeTenant -InSync
+                $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+                $group = $script:Config.Groups | Where-Object id -EQ 'sg-everyone-but-john'
+                $action = @($plan | Where-Object { $_.Kind -eq 'Group' -and $_.Target -eq $group.displayName })
+                $action | Should -HaveCount 1
+                $action[0].Action | Should -Be 'NoChange'
+                $action[0].ObjectId | Should -Be $group.externalObjectId
+                @($state.Calls | Where-Object { $_.Uri -like "groups/$($group.externalObjectId)/*" }) |
+                    Should -BeNullOrEmpty
+                $null = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                    -GraphInvoker (New-FakeInvoker $state) -Confirm:$false
+                @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+            }
+
+            It 'uses the pinned object even when another group has the same display name' {
+                $state = New-FakeTenant -InSync
+                $group = $script:Config.Groups | Where-Object id -EQ 'sg-everyone-but-john'
+                $duplicate = ($state.Groups | Where-Object id -EQ $group.externalObjectId).PSObject.Copy()
+                $duplicate.id = 'same-name-replacement'
+                $state.Groups = @($duplicate) + $state.Groups
+                $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+                ($plan | Where-Object { $_.Kind -eq 'Group' -and $_.Target -eq $group.displayName }).ObjectId |
+                    Should -Be $group.externalObjectId
+            }
+
+            It 'blocks a missing pinned group instead of creating or using a same-name replacement' {
+                $state = New-FakeTenant -InSync
+                $group = $script:Config.Groups | Where-Object id -EQ 'sg-everyone-but-john'
+                ($state.Groups | Where-Object id -EQ $group.externalObjectId).id = 'same-name-replacement'
+                $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+                $action = @($plan | Where-Object { $_.Kind -eq 'Group' -and $_.Target -eq $group.displayName })
+                $action | Should -HaveCount 1
+                $action[0].Action | Should -Be 'Skip'
+                $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                    -GraphInvoker (New-FakeInvoker $state) -Confirm:$false
+                @($results | Where-Object Status -EQ 'Failed').Count | Should -BeGreaterThan 0
+                @($state.Calls | Where-Object Method -NE 'GET') | Should -BeNullOrEmpty
+            }
+
+            It 'blocks an external group with mismatched identity or type' -ForEach @(
+                @{ Property = 'displayName'; Value = 'Renamed scope' }
+                @{ Property = 'securityEnabled'; Value = $false }
+                @{ Property = 'mailEnabled'; Value = $true }
+                @{ Property = 'groupTypes'; Value = @('Unified') }
+            ) {
+                $state = New-FakeTenant -InSync
+                $group = $script:Config.Groups | Where-Object id -EQ 'sg-everyone-but-john'
+                $remote = $state.Groups | Where-Object id -EQ $group.externalObjectId
+                $remote.$Property = $Value
+                $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+                ($plan | Where-Object { $_.Kind -eq 'Group' -and $_.Target -eq $group.displayName }).Action |
+                    Should -Be 'Skip'
+            }
+
+            It 'replaces both old productivity MAM assignments with only the pinned external group' {
+                $state = New-FakeTenant -InSync
+                $oldGroup = $state.Groups | Where-Object displayName -EQ 'CaC-Productivity-All'
+                foreach ($resource in @('androidManagedAppProtections', 'iosManagedAppProtections')) {
+                    $policy = $state.Policies[$resource][0]
+                    $state.Assignments[$policy.id] = @([pscustomobject]@{
+                        target = [pscustomobject]@{
+                            '@odata.type' = '#microsoft.graph.groupAssignmentTarget'
+                            groupId = $oldGroup.id
+                        }
+                    })
+                }
+                $plan = New-CaCPlan -Configuration $script:Config -GraphInvoker (New-FakeInvoker $state)
+                $changes = @($plan | Where-Object Action -NE 'NoChange')
+                $changes | Should -HaveCount 2
+                @($changes.Kind | Select-Object -Unique) | Should -Be @('Assignment')
+                $results = Invoke-CaCPlan -Plan $plan -Configuration $script:Config `
+                    -GraphInvoker (New-FakeInvoker $state) -Confirm:$false
+                @($results | Where-Object Status -NE 'Applied') | Should -BeNullOrEmpty
+                $writes = @($state.Calls | Where-Object Method -NE 'GET')
+                $writes | Should -HaveCount 2
+                foreach ($write in $writes) {
+                    $write.Uri | Should -Match '^deviceAppManagement/(android|ios)ManagedAppProtections/[^/]+/assign$'
+                    @($write.Body.assignments) | Should -HaveCount 1
+                    $write.Body.assignments[0].target.groupId | Should -Be 'dcab0165-8a3a-44fa-b43a-4aef5a8244d0'
+                }
+            }
+
+            It 'rejects stale external group mutation or replacement before any Graph calls' -ForEach @(
+                @{ Kind = 'Group'; Action = 'Create' }
+                @{ Kind = 'Group'; Action = 'Adopt' }
+                @{ Kind = 'Group'; Action = 'Delete' }
+                @{ Kind = 'Group'; Action = 'NoChange' }
+                @{ Kind = 'GroupMembership'; Action = 'Update' }
+            ) {
+                $state = New-FakeTenant
+                $group = $script:Config.Groups | Where-Object id -EQ 'sg-everyone-but-john'
+                $stale = [pscustomobject]@{
+                    Kind = $Kind
+                    Action = $Action
+                    Target = $group.displayName
+                    ObjectId = 'obsolete-object-id'
+                    Data = $group
+                }
+                { Invoke-CaCPlan -Plan @($stale) -Configuration $script:Config `
+                    -GraphInvoker (New-FakeInvoker $state) -Confirm:$false } |
+                    Should -Throw '*External group*read-only*'
+                $state.Calls | Should -BeNullOrEmpty
+            }
         }
 
         It 'reports no changes at all' {

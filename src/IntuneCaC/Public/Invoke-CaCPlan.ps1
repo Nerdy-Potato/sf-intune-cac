@@ -26,6 +26,34 @@ function Invoke-CaCPlan {
         [scriptblock] $GraphInvoker = { param($Method, $Uri, $Body) Invoke-CaCGraphRequest -Method $Method -Uri $Uri -Body $Body }
     )
 
+    foreach ($group in @($Configuration.Groups | Where-Object {
+                Test-CaCHasProperty -InputObject $_ -Name 'externalObjectId'
+            })) {
+        foreach ($action in @($Plan | Where-Object { $_.Kind -in @('Group', 'GroupMembership') })) {
+            $data = Get-CaCProperty -InputObject $action -Name 'Data'
+            $groupKey = if ($action.Kind -eq 'GroupMembership') {
+                Get-CaCProperty -InputObject $data -Name 'GroupKey'
+            }
+            elseif ($action.Action -eq 'Adopt') {
+                Get-CaCProperty -InputObject (Get-CaCProperty -InputObject $data -Name 'Group') -Name 'id'
+            }
+            else {
+                Get-CaCProperty -InputObject $data -Name 'id'
+            }
+            $objectId = Get-CaCProperty -InputObject $action -Name 'ObjectId'
+            $membershipGroupId = Get-CaCProperty -InputObject $data -Name 'GroupId'
+            if ($action.Target -ne $group.displayName -and $groupKey -ne $group.id -and
+                $objectId -ne $group.externalObjectId -and $membershipGroupId -ne $group.externalObjectId) {
+                continue
+            }
+            if ($action.Action -in @('Skip', 'Prerequisite')) { continue }
+            if ($action.Kind -eq 'Group' -and $action.Action -eq 'NoChange' -and
+                $objectId -eq $group.externalObjectId -and $groupKey -eq $group.id) { continue }
+
+            throw "External group '$($group.displayName)' is read-only and pinned to '$($group.externalObjectId)'. Regenerate the plan; no group mutation or replacement is allowed."
+        }
+    }
+
     $results = [System.Collections.Generic.List[object]]::new()
 
     function Add-Result {

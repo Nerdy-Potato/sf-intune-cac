@@ -61,7 +61,20 @@ function Test-CaCConfiguration {
 
     $tenant = $Configuration.Tenant
     $groupsById = @{}
-    foreach ($group in $Configuration.Groups) { $groupsById[$group.id] = $group }
+    foreach ($group in $Configuration.Groups) {
+        $groupsById[$group.id] = $group
+        if (Test-CaCHasProperty -InputObject $group -Name 'externalObjectId') {
+            $externalId = [guid]::Empty
+            if (-not [guid]::TryParse([string] $group.externalObjectId, [ref] $externalId) -or
+                $externalId -eq [guid]::Empty -or
+                (Get-CaCProperty -InputObject $group -Name 'membershipManagement') -ne 'manual' -or
+                $group.membership.source -ne 'explicit' -or
+                @($group.membership.values).Count -ne 0 -or @($group.members).Count -ne 0) {
+                Add-Finding -Severity 'Error' -Rule 'group/external-reference' -Target $group.id -Message `
+                    'An external group requires a nonempty GUID, membershipManagement=manual, and empty explicit membership; the repository must never manage it.'
+            }
+        }
+    }
     $appsById = @{}
     foreach ($app in $Configuration.Apps) { $appsById[$app.id] = $app }
 

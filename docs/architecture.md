@@ -52,6 +52,7 @@ That gives three categories:
 
 | Object | Behaviour |
 | --- | --- |
+| In config with `externalObjectId` | Read-only reference to that existing security group; never created or adopted |
 | In config, in the tenant | Reconciled to match the repository |
 | In config, not in the tenant | Created |
 | Not in config, in the tenant, **inside** the managed namespace | Reported as a deletion, only carried out with `allow_delete` |
@@ -65,6 +66,16 @@ at 2am - is invisible to this repository and survives untouched.
 Objects are matched by `displayName`, which is why validation rejects duplicates: `displayName` is
 the identity key. Renaming a policy is therefore a delete-and-create, not a rename, and the plan
 shows it as such.
+
+The exception is a group with `externalObjectId`: the planner resolves only that exact Entra object
+ID and verifies its configured display name, security-enabled/non-mail-enabled shape, and assigned
+or dynamic group type. Missing or mismatched references block deployment; a same-name replacement
+is never substituted or created. These references require `membershipManagement: "manual"` and
+empty explicit membership. Here, "manual" means outside this engine's ownership, including membership
+maintained by an Entra dynamic rule. The engine does not read or reconcile those members, change the
+rule or description, or add its managed marker. Apply rejects stale group mutations or replacement
+IDs before issuing any Graph calls. This preserves the externally maintained `EveryoneButDad-SG`
+used as the MAM inclusion scope; see [the management boundary](operations.md#johns-management-boundary).
 
 Matching is also ownership-aware. A matching group or policy must carry both the configured managed
 marker and the repository name prefix; apps must carry the managed marker. If an object with the
