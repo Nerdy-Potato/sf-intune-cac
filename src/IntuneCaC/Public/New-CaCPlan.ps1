@@ -6,7 +6,8 @@ function New-CaCPlan {
         Read-only. Nothing here mutates the tenant, so the plan can be produced from a pull request
         using a read-only app registration and reviewed before anybody approves a deployment.
 
-        Matching is by displayName inside the managed namespace (the tenant namePrefix). Objects
+        Matching is by displayName inside the managed namespace (the tenant namePrefix). External
+        security groups are referenced read-only by their configured externalObjectId instead. Objects
         outside that namespace are never returned as drift or as deletions, so anything created by
         hand in the portal is left strictly alone.
 
@@ -60,6 +61,29 @@ function New-CaCPlan {
     $groupObjectIds = @{}
 
     foreach ($group in $Configuration.Groups) {
+        if (Test-CaCHasProperty -InputObject $group -Name 'externalObjectId') {
+            $external = @($existingGroups | Where-Object { $_.id -eq $group.externalObjectId })
+            if ($external.Count -ne 1 -or
+                (Get-CaCProperty -InputObject $external[0] -Name 'displayName') -ne $group.displayName -or
+                (Get-CaCProperty -InputObject $external[0] -Name 'securityEnabled') -ne $true -or
+                (Get-CaCProperty -InputObject $external[0] -Name 'mailEnabled') -ne $false -or
+                -not (Test-CaCHasProperty -InputObject $external[0] -Name 'groupTypes') -or
+                @(Get-CaCProperty -InputObject $external[0] -Name 'groupTypes' |
+                    Where-Object { $_ -ne 'DynamicMembership' }).Count -gt 0) {
+                Add-Action -Kind 'Group' -Action 'Skip' -Target $group.displayName -Data $group -Details @(
+                    "external security group '$($group.externalObjectId)' is missing or its name/type does not match; refusing to create, adopt, or resolve a replacement by name"
+                )
+                continue
+            }
+
+            $groupObjectIds[$group.id] = $external[0].id
+            Add-Action -Kind 'Group' -Action 'NoChange' -Target $group.displayName -Data $group `
+                -ObjectId $external[0].id -Details @(
+                    'external group referenced by object id only; rule, description, and membership remain untouched'
+                )
+            continue
+        }
+
         $groupCandidates = @($existingGroups | Where-Object { $_.displayName -eq $group.displayName })
         $adoptionSpec = Get-CaCAdoptionSpec -Configuration $Configuration -Kind Group -Id $group.id
         if ($adoptionSpec -and $groupCandidates.Count -gt 1) {

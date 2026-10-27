@@ -24,6 +24,83 @@ managed marker and that existing membership remains intact, then remove `adoptio
 `config/tenant.json` through a reviewed pull request. A mismatch remains blocked; never replace this
 section with a global unmanaged-object bypass.
 
+### John's management boundary
+
+`john@spaid.family` remains an adult productivity account, but must not receive this tenant's MAM
+or be automatically enrolled into MDM. Use the existing **EveryoneButDad-SG** user security group
+as the positive inclusion scope for otherwise tenant-wide management. The requested name
+`EveryoneButJohn-SG` was not present when Entra was inspected; do not create or rename a group to
+make that spelling match.
+
+The verified existing group is `dcab0165-8a3a-44fa-b43a-4aef5a8244d0`, represented in config as
+`sg-everyone-but-john`. Its enabled dynamic membership rule is:
+
+```text
+(user.userPrincipalName -endsWith "spaid.family") and (user.userPrincipalName -notStartsWith "john")
+```
+
+The read-only Entra check confirmed John was absent and the seven other configured family
+productivity users were present. The group also contains tenant accounts outside this repository's
+account catalog; using it means those accounts are in management scope too. The rule excludes
+*all* matching UPNs starting with `john`, not just one immutable user ID, and membership is eventually
+consistent. Verify the intended members after identity or rule changes; the group name alone is not
+proof that John is excluded.
+
+This repository references the existing object read-only through `externalObjectId`; it never
+creates or adopts it, changes its rule, reconciles its membership, or adds a managed marker.
+`membershipManagement: "manual"` means Entra owns membership, even when it is dynamic.
+An absent object, changed display name, or wrong group type blocks planning instead of creating
+an empty replacement. Both Android and iOS app protection baselines now include only this group,
+not `CaC-Productivity-All`. Do not remove John from productivity metadata to work around policy
+targeting, and do not use the break-glass group for this exception.
+
+Repository assignments are only one part of the boundary. Complete these tenant checks before
+claiming the account has no MDM/MAM:
+
+| Surface | Required configuration or verification |
+| --- | --- |
+| Windows automatic MDM enrollment | Intune admin center > Devices > Enrollment > Windows > Automatic Enrollment: set **MDM user scope = Some**, select **EveryoneButDad-SG**, and remove other selected groups containing John. Do not select **None** globally. This controls Windows automatic enrollment only. |
+| All app protection policies | Apps > App protection policies (or Apps > Protection): replace broad management inclusions with **EveryoneButDad-SG**. Review Android, iOS/iPadOS, and any Windows policies, including policies not owned by this repository. Another included group can still target John. |
+| Managed-app configuration | Review Apps > App configuration policies, especially **Managed apps** policies. Use this positive scope for broad management policies; do not broaden existing child/teen configurations. |
+| Conditional Access | Review every enabled policy requiring a compliant device, app protection, or management-dependent device trust. Scope such broad management requirements to **EveryoneButDad-SG**. If combined with MFA, split the controls so John retains MFA. Leave unrelated MFA, passkey, risk, and legacy-authentication controls intact. |
+| Enrollment restrictions | Removing automatic enrollment scope is not a universal enrollment block. Review effective platform restrictions and priority. If supported user-driven enrollment must also be blocked, use higher-priority John-only platform block restrictions after verifying their assignment group. Never assign those block restrictions to **EveryoneButDad-SG**, which would block everyone else. Preserve the existing adult Android blocks. |
+| Other enrollment methods | Review Autopilot/device preparation, Apple automated enrollment, Android corporate provisioning, bulk enrollment, and userless paths separately. User scopes and enrollment restrictions do not govern every path. |
+| Existing managed devices | Inspect John's actual managed devices, enrollment identities, and user/device assignments. Device-targeted settings such as Windows LAPS still apply to an enrolled device regardless of this user group. A user group is not an exclusion for a device-group assignment, nor an intersection with tier groups. |
+
+The Entra inspection found nine Conditional Access policies with **no** compliant-device,
+app-protection, or hybrid-joined-device grant requirements. There is no evidenced need to change
+their scope for this boundary; retain their authentication protections. Recheck before deployment.
+The local Azure CLI identity could read Entra, but Intune app policies, managed devices, enrollment
+restrictions, and the MDM policy endpoint returned **403** for missing OAuth scopes. These reads
+are **unverified**, not empty inventories. Use the authorized read-only Plan identity for repository
+resources and an appropriately authorized tenant administrator for the remaining portal settings;
+do not grant write permissions merely to perform an inventory.
+
+Do not treat the legacy Windows MAM/WIP user scope as a master switch for modern Intune app
+protection. Changing MDM automatic enrollment scope alone does not stop MAM.
+
+Before rollout, capture current policy assignments and enrollment/Conditional Access settings.
+The reviewed plan should bind the external group as `NoChange` and replace only the two broad MAM
+assignments for this change, with no group creation, adoption, or membership writes. Resolve any
+unrelated drift separately before approving deployment. After rollout, verify effective MAM status
+for John and an included family user, check Conditional Access What If and actual sign-in logs, and
+confirm automatic enrollment scope plus effective enrollment restrictions.
+
+Removing assignments does **not** unenroll an existing device or instantly remove cached MAM state.
+Inventory that state first. Device retirement, app-data selective wipe, account removal, and deletion
+are separate explicit decisions, never automatic cleanup for this change. Do not use the managed-app
+wipe workflow merely to change targeting. Roll back by restoring captured portal settings and the
+prior repository assignments through the reviewed deployment path.
+
+Microsoft references: [Windows automatic enrollment][john-mdm-scope],
+[app protection assignments][john-app-protection], [enrollment restriction limitations][john-enrollment],
+and [Conditional Access device compliance][john-ca].
+
+[john-mdm-scope]: https://learn.microsoft.com/en-us/intune/device-enrollment/windows/enable-automatic-mdm
+[john-app-protection]: https://learn.microsoft.com/en-us/intune/app-management/protection/create-policy
+[john-enrollment]: https://learn.microsoft.com/en-us/intune/device-enrollment/restrictions
+[john-ca]: https://learn.microsoft.com/en-us/entra/identity/conditional-access/policy-all-users-device-compliance
+
 ### Re-running a deploy
 
 Deploy runs on matching configuration, source, script, or deploy-workflow pushes to `main` and can

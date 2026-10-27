@@ -4,11 +4,12 @@
     "App protection (MAM) for iOS. This is the control that matters most on a family tenant:",
     "most devices are personally owned, so protecting the data inside Outlook/OneDrive is more",
     "effective - and far less disruptive - than trying to fully manage the device.",
-    "Applies to every tier: this is data protection, not a parenting control."
+    "Applies across tiers only to members of the existing EveryoneButDad-SG dynamic user group.",
+    "John stays a productivity/adult account but must not receive MAM from this tenant."
   ],
   "name": "ios-app-protection-baseline",
   "resource": "iosManagedAppProtections",
-  "assignments": [{ "group": "sg-productivity-all", "intent": "include" }],
+  "assignments": [{ "group": "sg-everyone-but-john", "intent": "include" }],
   "apps": [
     {
       "mobileAppIdentifier": {

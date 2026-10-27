@@ -252,21 +252,25 @@ The MAM SDK (used by Outlook, Teams, OneDrive, the Office apps, and Edge under
 > This app is already managed with account X. Only a single managed account is allowed for this
 > app. To use account X, you must first remove X from this application.
 
-This is not caused by tenant policy - it means the tenant-side `managedAppRegistration` record for
-that user/app/device is stale or orphaned, most often after a device reset, app reinstall, or
-clearing Company Portal's storage without also clearing the affected app's own storage. Try, in
-order:
+The message alone does not establish a stale registration. First verify whether this tenant should
+manage the signed-in identity at all: an app can reject an additional managed account when MAM
+targets it. For John, correct the assignments using
+[John's management boundary](operations.md#johns-management-boundary); do not wipe app data to work
+around unintended policy targeting. A stale registration after a reset or reinstall is another
+possible cause.
 
-1. On the device: clear storage/cache for the affected app itself, then for Intune Company Portal,
-   restart the device, and sign back in. This is local-only and touches nothing server-side.
-2. If it persists, dispatch `Inspect Intune MAM app registrations` (`upn`, optional
+1. Dispatch `Inspect Intune MAM app registrations` (`upn`, optional
    `app_id_filter`) - read-only, backed by `scripts/bootstrap/Get-CaCManagedAppRegistrations.ps1` -
-   to list the user's registrations and find the `deviceTag` for the stuck device.
-3. Dispatch `Wipe Intune MAM app registrations by device tag` (`upn`, `device_tag`, `confirm: true`)
+   to list registrations and identify the affected account, apps, and device.
+2. After correcting assignments, allow policy refresh and verify effective app protection status.
+   Local sign-out, storage clearing, or reinstallation can remove cached data and require account
+   setup again; review unsynced data before choosing any of these actions.
+3. Only for a confirmed stale registration and with explicit approval, dispatch
+   `Wipe Intune MAM app registrations by device tag` (`upn`, `device_tag`, `confirm: true`)
    - backed by `scripts/bootstrap/Invoke-CaCManagedAppWipe.ps1`, which calls Graph's documented
    `wipeManagedAppRegistrationsByDeviceTag` action. This wipes every managed app registration
    sharing that `deviceTag` for the user (i.e. every corporate-managed app container on that one
    device) - not just the one app that was showing the error, since the MAM SDK correlates
-   registrations on the same device by `deviceTag`. It does not touch the user's account, mailbox,
-   files, personal app data, or other devices; each app re-registers and re-syncs from the cloud the
-   next time it is reopened and signed in.
+   registrations on the same device by `deviceTag`. It is a corporate app-data wipe, not a harmless
+   targeting change; local unsynced organizational data can be lost. It does not delete the cloud
+   account or mailbox. If the account remains in policy scope, signing in again can reapply MAM.

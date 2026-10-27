@@ -78,6 +78,17 @@
       "membership": { "source": "accountType", "values": ["admin"] }
     },
     {
+      "id": "sg-everyone-but-john",
+      "displayName": "EveryoneButDad-SG",
+      "mailNickname": "056730c0-b",
+      "description": "Existing Entra dynamic user group for management scope without John. Externally maintained; never create or change its rule or membership.",
+      "purpose": "assignment",
+      "memberType": "user",
+      "externalObjectId": "dcab0165-8a3a-44fa-b43a-4aef5a8244d0",
+      "membershipManagement": "manual",
+      "membership": { "source": "explicit", "values": [] }
+    },
+    {
       "id": "sg-productivity-all",
       "displayName": "CaC-Productivity-All",
       "mailNickname": "cac-productivity-all",

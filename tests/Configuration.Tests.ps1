@@ -54,6 +54,36 @@ Describe 'Repository configuration' {
         $youngest.ageTierConfirmed | Should -Be @($true, $true, $true)
     }
 
+    It 'references the existing management scope without changing its dynamic membership' {
+        $group = $script:Config.Groups | Where-Object id -EQ 'sg-everyone-but-john'
+        $group.displayName | Should -Be 'EveryoneButDad-SG'
+        $group.externalObjectId | Should -Be 'dcab0165-8a3a-44fa-b43a-4aef5a8244d0'
+        $group.memberType | Should -Be 'user'
+        $group.membershipManagement | Should -Be 'manual'
+        $group.membership.source | Should -Be 'explicit'
+        $group.membership.values | Should -BeNullOrEmpty
+        $group.members | Should -BeNullOrEmpty
+        @($script:Config.Tenant.adoption.groups.id) | Should -Not -Contain $group.id
+    }
+
+    It 'scopes both MAM baselines to the existing group without broadening tier policies' {
+        $mamNames = @('android-app-protection-baseline', 'ios-app-protection-baseline')
+        $mam = @($script:Config.Policies | Where-Object name -In $mamNames)
+        $mam | Should -HaveCount 2
+        foreach ($policy in $mam) {
+            @($policy.assignments) | Should -HaveCount 1
+            $policy.assignments[0].group | Should -Be 'sg-everyone-but-john'
+            $policy.assignments[0].intent | Should -Be 'include'
+        }
+        @($script:Config.Policies | Where-Object {
+                $_.name -notin $mamNames -and 'sg-everyone-but-john' -in $_.assignments.group
+            }) | Should -BeNullOrEmpty
+        ($script:Config.Users | Where-Object id -EQ 'john').tier | Should -Be 'adult'
+        ($script:Config.Users | Where-Object id -EQ 'john').accountType | Should -Be 'productivity'
+        ($script:Config.Groups | Where-Object id -EQ 'sg-productivity-all').members |
+            Should -Contain 'john@spaid.family'
+    }
+
     It 'defines the assigned Autopilot device preparation group with no static members' {
         $group = $script:Config.Groups | Where-Object id -EQ 'sg-autopilot-device-preparation-child'
         $group.members | Should -BeNullOrEmpty
@@ -233,6 +263,23 @@ Describe 'Repository configuration' {
 Describe 'Validation rules' {
     BeforeEach {
         $script:Draft = Get-CaCConfiguration -Path (Join-Path $script:RepoRoot 'config')
+    }
+
+    It 'rejects external group references with unsafe membership or identity' -ForEach @(
+        @{ Change = 'managed-membership' }
+        @{ Change = 'desired-members' }
+        @{ Change = 'invalid-id' }
+        @{ Change = 'empty-id' }
+    ) {
+        $group = $script:Draft.Groups | Where-Object id -EQ 'sg-everyone-but-john'
+        switch ($Change) {
+            'managed-membership' { $group.Remove('membershipManagement') }
+            'desired-members' { $group.membership.values = @('john') }
+            'invalid-id' { $group.externalObjectId = 'not-a-guid' }
+            'empty-id' { $group.externalObjectId = [guid]::Empty.ToString() }
+        }
+        $result = Test-CaCConfiguration -Configuration $script:Draft
+        @($result | Where-Object Rule -EQ 'group/external-reference') | Should -Not -BeNullOrEmpty
     }
 
     It 'rejects an assignment to a group that does not exist' {
